@@ -1,35 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  // LOGIN FUNCTION
   const handleLogin = async (e: any) => {
     e.preventDefault();
 
-    const { data, error } =
+    setLoading(true);
+
+    const { error } =
       await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+    setLoading(false);
 
     if (error) {
       alert(error.message);
       return;
     }
 
-    router.push("/dashboard");
+    // SUCCESS LOGIN
+    window.location.href = "/dashboard";
   };
 
+  // FORGOT PASSWORD
   const handleForgotPassword = async () => {
     if (!email) {
-      alert("Enter your email first");
+      alert("Please enter your email first");
       return;
     }
 
@@ -45,13 +50,15 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
-      alert("Reset email sent ✅");
+      alert("Password reset email sent ✅");
     }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
+        
+        {/* TITLE */}
         <h1 style={styles.title}>
           Obelix IT System
         </h1>
@@ -60,6 +67,7 @@ export default function LoginPage() {
           Secure Admin Access Portal
         </p>
 
+        {/* LOGIN FORM */}
         <form
           onSubmit={handleLogin}
           style={styles.form}
@@ -72,6 +80,7 @@ export default function LoginPage() {
               setEmail(e.target.value)
             }
             style={styles.input}
+            required
           />
 
           <input
@@ -82,16 +91,20 @@ export default function LoginPage() {
               setPassword(e.target.value)
             }
             style={styles.input}
+            required
           />
 
           <button
             type="submit"
             style={styles.button}
           >
-            Login
+            {loading
+              ? "Logging in..."
+              : "Login"}
           </button>
         </form>
 
+        {/* FORGOT PASSWORD */}
         <p
           onClick={handleForgotPassword}
           style={styles.forgot}
@@ -99,9 +112,14 @@ export default function LoginPage() {
           Forgot Password?
         </p>
 
+        {/* FOOTER */}
         <p style={styles.dev}>
           © {new Date().getFullYear()}
           Obelix IT System
+        </p>
+
+        <p style={styles.devSmall}>
+          Developed by <b>Shyam</b>
         </p>
       </div>
     </div>
@@ -124,17 +142,21 @@ const styles: any = {
     padding: 30,
     background: "#111827",
     borderRadius: 12,
+    boxShadow:
+      "0 10px 40px rgba(0,0,0,0.6)",
     textAlign: "center",
   },
 
   title: {
     color: "#38bdf8",
-    marginBottom: 10,
+    fontSize: 24,
+    marginBottom: 5,
   },
 
   subtitle: {
     color: "#94a3b8",
-    marginBottom: 20,
+    marginBottom: 25,
+    fontSize: 14,
   },
 
   form: {
@@ -149,6 +171,7 @@ const styles: any = {
     border: "1px solid #334155",
     background: "#0f172a",
     color: "white",
+    outline: "none",
   },
 
   button: {
@@ -158,17 +181,25 @@ const styles: any = {
     border: "none",
     borderRadius: 6,
     cursor: "pointer",
+    fontWeight: "bold",
   },
 
   forgot: {
     marginTop: 15,
     color: "#38bdf8",
     cursor: "pointer",
+    fontSize: 14,
   },
 
   dev: {
     marginTop: 20,
-    color: "#64748b",
     fontSize: 12,
+    color: "#64748b",
+  },
+
+  devSmall: {
+    marginTop: 5,
+    fontSize: 12,
+    color: "#475569",
   },
 };
