@@ -6,65 +6,60 @@ import { useRouter } from "next/navigation";
 export default function LoginPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = (e: any) => {
     e.preventDefault();
-    setLoading(true);
 
-    setTimeout(() => {
-      if (username === "admin" && password === "admin") {
-        localStorage.setItem("loggedIn", "true");
-        router.push("/dashboard");
-      } else {
-        alert("Invalid credentials ❌");
-      }
-      setLoading(false);
-    }, 800);
+    // Demo login (we will replace with Supabase Auth later)
+    if (email === "admin@obelix.com" && password === "admin123") {
+      localStorage.setItem("loggedIn", "true");
+      router.push("/dashboard");
+    } else {
+      alert("Invalid credentials ❌");
+    }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>IT Inventory System</h1>
-        <p style={styles.subtitle}>Admin Login Portal</p>
+        
+        {/* BRAND */}
+        <h1 style={styles.title}>Obelix IT System</h1>
+        <p style={styles.subtitle}>Secure Admin Access Portal</p>
 
+        {/* FORM */}
         <form onSubmit={handleLogin} style={styles.form}>
           <input
+            type="email"
+            placeholder="Enter Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             style={styles.input}
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
           />
 
           <input
-            style={styles.input}
             type="password"
-            placeholder="Password"
+            placeholder="Enter Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            style={styles.input}
           />
 
-          <div style={styles.row}>
-            <label style={styles.checkbox}>
-              <input type="checkbox" /> Remember me
-            </label>
-
-            <a href="#" style={styles.link}>
-              Forgot password?
-            </a>
-          </div>
-
-          <button style={styles.button} type="submit">
-            {loading ? "Logging in..." : "Login"}
+          <button type="submit" style={styles.button}>
+            Login
           </button>
-
-          <div style={styles.footer}>
-            <p>Default login: admin / admin</p>
-          </div>
         </form>
+
+        {/* FOOTER */}
+        <p style={styles.dev}>
+          © {new Date().getFullYear()} Obelix IT System
+        </p>
+
+        <p style={styles.devSmall}>
+          Developed by <b>Shyam</b>
+        </p>
       </div>
     </div>
   );
@@ -77,63 +72,64 @@ const styles: any = {
     justifyContent: "center",
     alignItems: "center",
     background: "linear-gradient(135deg, #0f172a, #1e293b)",
-    fontFamily: "Arial"
+    fontFamily: "Arial",
   },
+
   card: {
     width: 380,
     padding: 30,
+    background: "#111827",
     borderRadius: 12,
-    background: "rgba(255,255,255,0.08)",
-    backdropFilter: "blur(10px)",
-    color: "white",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+    boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+    textAlign: "center",
   },
+
   title: {
-    textAlign: "center",
-    marginBottom: 5
+    color: "#38bdf8",
+    fontSize: 24,
+    marginBottom: 5,
   },
+
   subtitle: {
-    textAlign: "center",
+    color: "#94a3b8",
+    marginBottom: 25,
     fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 20
   },
+
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: 12
+    gap: 12,
   },
+
   input: {
     padding: 12,
     borderRadius: 6,
-    border: "none",
-    outline: "none"
+    border: "1px solid #334155",
+    background: "#0f172a",
+    color: "white",
+    outline: "none",
   },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 12
-  },
-  checkbox: {
-    display: "flex",
-    gap: 5
-  },
-  link: {
-    color: "#60a5fa",
-    textDecoration: "none"
-  },
+
   button: {
     padding: 12,
-    borderRadius: 6,
-    border: "none",
     background: "#2563eb",
     color: "white",
-    cursor: "pointer"
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: "bold",
   },
-  footer: {
-    textAlign: "center",
+
+  dev: {
+    marginTop: 20,
     fontSize: 12,
-    opacity: 0.6,
-    marginTop: 10
-  }
+    color: "#64748b",
+  },
+
+  devSmall: {
+    marginTop: 5,
+    fontSize: 12,
+    color: "#475569",
+  },
 };
