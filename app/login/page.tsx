@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -9,33 +10,67 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = (e: any) => {
+  const handleLogin = async (e: any) => {
     e.preventDefault();
 
-    // Demo login (we will replace with Supabase Auth later)
-    if (email === "admin@obelix.com" && password === "admin123") {
-      localStorage.setItem("loggedIn", "true");
-      router.push("/dashboard");
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    router.push("/dashboard");
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      alert("Enter your email first");
+      return;
+    }
+
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo:
+            "https://obelix-it-inventory.vercel.app/reset-password",
+        }
+      );
+
+    if (error) {
+      alert(error.message);
     } else {
-      alert("Invalid credentials ❌");
+      alert("Reset email sent ✅");
     }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        
-        {/* BRAND */}
-        <h1 style={styles.title}>Obelix IT System</h1>
-        <p style={styles.subtitle}>Secure Admin Access Portal</p>
+        <h1 style={styles.title}>
+          Obelix IT System
+        </h1>
 
-        {/* FORM */}
-        <form onSubmit={handleLogin} style={styles.form}>
+        <p style={styles.subtitle}>
+          Secure Admin Access Portal
+        </p>
+
+        <form
+          onSubmit={handleLogin}
+          style={styles.form}
+        >
           <input
             type="email"
             placeholder="Enter Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
             style={styles.input}
           />
 
@@ -43,22 +78,30 @@ export default function LoginPage() {
             type="password"
             placeholder="Enter Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
             style={styles.input}
           />
 
-          <button type="submit" style={styles.button}>
+          <button
+            type="submit"
+            style={styles.button}
+          >
             Login
           </button>
         </form>
 
-        {/* FOOTER */}
-        <p style={styles.dev}>
-          © {new Date().getFullYear()} Obelix IT System
+        <p
+          onClick={handleForgotPassword}
+          style={styles.forgot}
+        >
+          Forgot Password?
         </p>
 
-        <p style={styles.devSmall}>
-          Developed by <b>Shyam</b>
+        <p style={styles.dev}>
+          © {new Date().getFullYear()}
+          Obelix IT System
         </p>
       </div>
     </div>
@@ -71,7 +114,8 @@ const styles: any = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "linear-gradient(135deg, #0f172a, #1e293b)",
+    background:
+      "linear-gradient(135deg, #0f172a, #1e293b)",
     fontFamily: "Arial",
   },
 
@@ -80,20 +124,17 @@ const styles: any = {
     padding: 30,
     background: "#111827",
     borderRadius: 12,
-    boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
     textAlign: "center",
   },
 
   title: {
     color: "#38bdf8",
-    fontSize: 24,
-    marginBottom: 5,
+    marginBottom: 10,
   },
 
   subtitle: {
     color: "#94a3b8",
-    marginBottom: 25,
-    fontSize: 14,
+    marginBottom: 20,
   },
 
   form: {
@@ -108,7 +149,6 @@ const styles: any = {
     border: "1px solid #334155",
     background: "#0f172a",
     color: "white",
-    outline: "none",
   },
 
   button: {
@@ -118,18 +158,17 @@ const styles: any = {
     border: "none",
     borderRadius: 6,
     cursor: "pointer",
-    fontWeight: "bold",
+  },
+
+  forgot: {
+    marginTop: 15,
+    color: "#38bdf8",
+    cursor: "pointer",
   },
 
   dev: {
     marginTop: 20,
-    fontSize: 12,
     color: "#64748b",
-  },
-
-  devSmall: {
-    marginTop: 5,
     fontSize: 12,
-    color: "#475569",
   },
 };
