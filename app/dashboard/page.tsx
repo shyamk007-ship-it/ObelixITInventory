@@ -35,6 +35,8 @@ export default function Dashboard() {
     useState<any[]>([]);
 
   useEffect(() => {
+    let realtimeChannel: any = null;
+
     const initialize = async () => {
       const isAuthenticated = await checkUser();
       if (!isAuthenticated) {
@@ -43,9 +45,40 @@ export default function Dashboard() {
 
       await loadDashboard();
       await loadLogs();
+
+      realtimeChannel = supabase
+        .channel("realtime_dashboard")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "activity_logs" },
+          async () => {
+            await loadLogs();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "assets" },
+          async () => {
+            await loadDashboard();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "assets" },
+          async () => {
+            await loadDashboard();
+          }
+        )
+        .subscribe();
     };
 
     initialize();
+
+    return () => {
+      if (realtimeChannel) {
+        realtimeChannel.unsubscribe();
+      }
+    };
   }, []);
 
   const checkUser = async () => {

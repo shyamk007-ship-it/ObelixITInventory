@@ -77,6 +77,10 @@ export default function Sidebar() {
               </Link>
             )}
 
+            <Link href="/admin/activity" style={styles.link}>
+              Activity
+            </Link>
+
             {canManageUsers(role) && (
               <Link href="/admin/users" style={styles.link}>
                 Users

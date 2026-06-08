@@ -1,17 +1,23 @@
 "use client";
 
 import ProfileMenu from "./ProfileMenu";
+import NotificationBell from "./NotificationBell";
 
 export default function TopBar() {
   return (
     <div style={styles.topbar}>
-      <input
-        type="text"
-        placeholder="Search..."
-        style={styles.search}
-      />
+      <div style={styles.leftGroup}>
+        <input
+          type="text"
+          placeholder="Search assets, employees, activity..."
+          style={styles.search}
+        />
+      </div>
 
-      <ProfileMenu />
+      <div style={styles.rightGroup}>
+        <NotificationBell />
+        <ProfileMenu />
+      </div>
     </div>
   );
 }
@@ -22,13 +28,26 @@ const styles: any = {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 30,
+    gap: 16,
+  },
+
+  leftGroup: {
+    flex: 1,
+  },
+
+  rightGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
   },
 
   search: {
-    width: 300,
+    width: "100%",
+    maxWidth: 420,
     padding: 14,
     borderRadius: 10,
     border: "1px solid #cbd5e1",
     fontSize: 16,
+    background: "white",
   },
 };
