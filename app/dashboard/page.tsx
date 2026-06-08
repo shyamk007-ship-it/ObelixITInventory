@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { getUserProfile, isEmployee } from "../lib/rbac";
 
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -54,6 +55,18 @@ export default function Dashboard() {
 
     if (!session) {
       window.location.href = "/login";
+      return false;
+    }
+
+    const profile = await getUserProfile();
+
+    if (!profile) {
+      window.location.href = "/login";
+      return false;
+    }
+
+    if (isEmployee(profile.role)) {
+      window.location.href = "/employee";
       return false;
     }
 

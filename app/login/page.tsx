@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { getUserProfile, isEmployee } from "../lib/rbac";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,14 +21,20 @@ export default function LoginPage() {
         password,
       });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       alert(error.message);
       return;
     }
 
-    // SUCCESS LOGIN
+    const profile = await getUserProfile();
+    setLoading(false);
+
+    if (profile && isEmployee(profile.role)) {
+      window.location.href = "/employee";
+      return;
+    }
+
     window.location.href = "/dashboard";
   };
 

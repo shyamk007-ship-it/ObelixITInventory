@@ -16,7 +16,7 @@ export default function UsersPage() {
     useState("");
 
   const [role, setRole] =
-    useState("viewer");
+    useState("employee");
 
   useEffect(() => {
     checkAccess();
@@ -39,9 +39,8 @@ export default function UsersPage() {
       .eq("email", user.email)
       .single();
 
-    if (
-      data?.role !== "super_admin"
-    ) {
+    const roleValue = data?.role?.toLowerCase();
+    if (roleValue !== "admin" && roleValue !== "super_admin") {
       alert("Access denied");
 
       window.location.href =
@@ -90,7 +89,7 @@ export default function UsersPage() {
 
     setFullName("");
     setEmail("");
-    setRole("viewer");
+    setRole("employee");
 
     fetchUsers();
   };
@@ -131,8 +130,8 @@ export default function UsersPage() {
           }
           style={styles.input}
         >
-          <option value="viewer">
-            Viewer
+          <option value="employee">
+            Employee
           </option>
 
           <option value="it_staff">
@@ -141,10 +140,6 @@ export default function UsersPage() {
 
           <option value="admin">
             Admin
-          </option>
-
-          <option value="super_admin">
-            Super Admin
           </option>
         </select>
 

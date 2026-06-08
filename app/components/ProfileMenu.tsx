@@ -3,30 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { getUserProfile, roleLabel, Role } from "../lib/rbac";
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState("Admin");
+  const [role, setRole] = useState<Role>("unknown");
 
   const router = useRouter();
 
   useEffect(() => {
     const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const profile = await getUserProfile();
 
-      if (!user) {
+      if (!profile) {
         router.push("/login");
         return;
       }
 
-      const displayName =
-        user.user_metadata?.full_name ||
-        user.email ||
-        "Admin";
-
-      setUserName(displayName);
+      setUserName(profile.full_name);
+      setRole(profile.role);
     };
 
     fetchUser();
@@ -57,6 +53,10 @@ export default function ProfileMenu() {
 
       {open && (
         <div style={styles.dropdown}>
+          <div style={styles.profileHeader}>
+            <span style={styles.profileName}>{userName}</span>
+            <span style={styles.roleBadge}>{roleLabel[role] || "Unknown"}</span>
+          </div>
           <button style={styles.dropdownItem} type="button">
             Profile
           </button>
@@ -141,9 +141,31 @@ const styles: any = {
     borderRadius: 16,
     boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
     overflow: "hidden",
-    minWidth: 180,
+    minWidth: 220,
     zIndex: 999,
     border: "1px solid #e2e8f0",
+  },
+
+  profileHeader: {
+    padding: "16px 16px 8px",
+    borderBottom: "1px solid #e2e8f0",
+  },
+
+  profileName: {
+    display: "block",
+    fontWeight: 700,
+    color: "#0f172a",
+    marginBottom: 6,
+  },
+
+  roleBadge: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 700,
   },
 
   dropdownItem: {
