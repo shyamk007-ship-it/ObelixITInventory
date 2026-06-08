@@ -74,9 +74,14 @@ export default function NotificationBell() {
         if (!record.maintenance_date) continue;
         const maintenanceDate = new Date(record.maintenance_date);
         if (maintenanceDate >= now && maintenanceDate <= dueThreshold) {
+          const assetName =
+            record.assets?.asset_name ||
+            record.assets?.[0]?.asset_name ||
+            "Asset";
+
           await createNotificationIfNotExists({
             title: "Maintenance due",
-            message: `${record.assets?.asset_name || "Asset"} is due for maintenance on ${maintenanceDate.toLocaleDateString()}.`,
+            message: `${assetName} is due for maintenance on ${maintenanceDate.toLocaleDateString()}.`,
             action: "Maintenance Due",
             recordType: "asset_maintenance",
             recordId: record.id,
