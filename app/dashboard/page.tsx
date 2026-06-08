@@ -34,9 +34,31 @@ export default function Dashboard() {
     useState<any[]>([]);
 
   useEffect(() => {
-    loadDashboard();
-    loadLogs();
+    const initialize = async () => {
+      const isAuthenticated = await checkUser();
+      if (!isAuthenticated) {
+        return;
+      }
+
+      await loadDashboard();
+      await loadLogs();
+    };
+
+    initialize();
   }, []);
+
+  const checkUser = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      window.location.href = "/login";
+      return false;
+    }
+
+    return true;
+  };
 
   // LOAD DASHBOARD
   const loadDashboard = async () => {
