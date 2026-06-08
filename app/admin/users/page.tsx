@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function UsersPage() {
+  const [authorized, setAuthorized] =
+    useState(false);
+
   const [users, setUsers] = useState<any[]>([]);
 
   const [fullName, setFullName] =
@@ -16,8 +19,41 @@ export default function UsersPage() {
     useState("viewer");
 
   useEffect(() => {
-    fetchUsers();
+    checkAccess();
   }, []);
+
+  // CHECK ACCESS
+  const checkAccess = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", user.email)
+      .single();
+
+    if (
+      data?.role !== "super_admin"
+    ) {
+      alert("Access denied");
+
+      window.location.href =
+        "/dashboard";
+
+      return;
+    }
+
+    setAuthorized(true);
+
+    fetchUsers();
+  };
 
   // FETCH USERS
   const fetchUsers = async () => {
@@ -36,11 +72,6 @@ export default function UsersPage() {
 
   // CREATE USER
   const createUser = async () => {
-    if (!fullName || !email) {
-      alert("Fill all fields");
-      return;
-    }
-
     const { error } =
       await supabase.from("users").insert([
         {
@@ -64,16 +95,15 @@ export default function UsersPage() {
     fetchUsers();
   };
 
+  if (!authorized) {
+    return <h1>Checking access...</h1>;
+  }
+
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>
-        User Management
-      </h1>
+      <h1>User Management</h1>
 
-      {/* CREATE USER FORM */}
       <div style={styles.formCard}>
-        <h2>Create User</h2>
-
         <input
           type="text"
           placeholder="Full Name"
@@ -126,44 +156,41 @@ export default function UsersPage() {
         </button>
       </div>
 
-      {/* USERS TABLE */}
-      <div style={{ marginTop: 40 }}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>
-                Name
-              </th>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th style={styles.th}>
+              Name
+            </th>
 
-              <th style={styles.th}>
-                Email
-              </th>
+            <th style={styles.th}>
+              Email
+            </th>
 
-              <th style={styles.th}>
-                Role
-              </th>
+            <th style={styles.th}>
+              Role
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {users.map((user) => (
+            <tr key={user.id}>
+              <td style={styles.td}>
+                {user.full_name}
+              </td>
+
+              <td style={styles.td}>
+                {user.email}
+              </td>
+
+              <td style={styles.td}>
+                {user.role}
+              </td>
             </tr>
-          </thead>
-
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td style={styles.td}>
-                  {user.full_name}
-                </td>
-
-                <td style={styles.td}>
-                  {user.email}
-                </td>
-
-                <td style={styles.td}>
-                  {user.role}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -172,30 +199,18 @@ const styles: any = {
   container: {
     padding: 40,
     fontFamily: "Arial",
-    background: "#f8fafc",
-    minHeight: "100vh",
-  },
-
-  title: {
-    marginBottom: 30,
   },
 
   formCard: {
-    background: "white",
-    padding: 20,
-    borderRadius: 10,
     width: 400,
     display: "flex",
     flexDirection: "column",
     gap: 12,
-    boxShadow:
-      "0 5px 20px rgba(0,0,0,0.1)",
+    marginBottom: 30,
   },
 
   input: {
     padding: 12,
-    borderRadius: 6,
-    border: "1px solid #cbd5e1",
   },
 
   button: {
@@ -203,26 +218,22 @@ const styles: any = {
     background: "#2563eb",
     color: "white",
     border: "none",
-    borderRadius: 6,
     cursor: "pointer",
-    fontWeight: "bold",
   },
 
   table: {
     width: "100%",
     borderCollapse: "collapse",
-    background: "white",
   },
 
   th: {
-    padding: 12,
     border: "1px solid #ddd",
-    background: "#e2e8f0",
-    textAlign: "left",
+    padding: 12,
+    background: "#f1f5f9",
   },
 
   td: {
-    padding: 12,
     border: "1px solid #ddd",
+    padding: 12,
   },
 };
