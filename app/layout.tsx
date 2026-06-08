@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "IT Inventory",
-  description: "IT Asset Management System",
+  title: "IT Management",
+  description: "IT Management System",
 };
 
 export default function RootLayout({

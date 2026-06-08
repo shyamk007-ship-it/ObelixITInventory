@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
@@ -43,14 +43,14 @@ export default function LoginPage() {
         email,
         {
           redirectTo:
-            "https://obelix-it-inventory.vercel.app/reset-password",
+            `${window.location.origin}/reset-password`,
         }
       );
 
     if (error) {
       alert(error.message);
     } else {
-      alert("Password reset email sent ✅");
+      alert("Password reset email sent âœ…");
     }
   };
 
@@ -60,11 +60,11 @@ export default function LoginPage() {
         
         {/* TITLE */}
         <h1 style={styles.title}>
-          Obelix IT System
+          IT Management
         </h1>
 
         <p style={styles.subtitle}>
-          Secure Admin Access Portal
+          Secure IT Management Portal
         </p>
 
         {/* LOGIN FORM */}
@@ -114,8 +114,7 @@ export default function LoginPage() {
 
         {/* FOOTER */}
         <p style={styles.dev}>
-          © {new Date().getFullYear()}
-          Obelix IT System
+          Â© {new Date().getFullYear()} IT Management
         </p>
 
         <p style={styles.devSmall}>
@@ -203,3 +202,4 @@ const styles: any = {
     color: "#475569",
   },
 };
+
