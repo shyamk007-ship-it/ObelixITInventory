@@ -381,12 +381,42 @@ export default function TicketsAdminPage() {
     ? staff.find((user) => user.id === selectedTicket.assigned_to)?.full_name || "Unassigned"
     : "Unassigned";
 
+  const ticketStatusStyles = (status: TicketStatus) => {
+    switch (status) {
+      case "Open":
+        return { background: "#e0f2fe", color: "#0369a1" };
+      case "In Progress":
+        return { background: "#fef9c3", color: "#92400e" };
+      case "Resolved":
+        return { background: "#dcfce7", color: "#166534" };
+      case "Closed":
+        return { background: "#f5f3ff", color: "#5b21b6" };
+      default:
+        return { background: "#e2e8f0", color: "#334155" };
+    }
+  };
+
+  const ticketPriorityStyles = (priority: TicketPriority) => {
+    switch (priority) {
+      case "Critical":
+        return { background: "#fee2e2", color: "#b91c1c" };
+      case "High":
+        return { background: "#fed7aa", color: "#c2410c" };
+      case "Medium":
+        return { background: "#e0f2fe", color: "#0369a1" };
+      case "Low":
+        return { background: "#d1fae5", color: "#166534" };
+      default:
+        return { background: "#e2e8f0", color: "#334155" };
+    }
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1>Support Tickets</h1>
-          <p>Manage requests, assign ownership, and keep tickets moving.</p>
+          <h1>IT Helpdesk</h1>
+          <p>Manage team tickets, assign priority, and track support resolution.</p>
         </div>
         <button onClick={exportTickets} style={styles.actionButton}>
           Export Tickets
@@ -518,12 +548,15 @@ export default function TicketsAdminPage() {
                       onClick={() => handleSelectTicket(ticket.id)}
                     >
                       <div style={styles.ticketHeader}>
-                        <span>{ticket.priority}</span>
+                        <span style={{ ...styles.badge, ...ticketPriorityStyles(ticket.priority) }}>{ticket.priority}</span>
                         <strong>{ticket.title}</strong>
                       </div>
                       <div style={styles.ticketMeta}>
                         <span>{ticket.category}</span>
                         <span>{new Date(ticket.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <div style={styles.statusRow}>
+                        <span style={{ ...styles.statusBadge, ...ticketStatusStyles(ticket.status) }}>{ticket.status}</span>
                       </div>
                     </button>
                   ))
@@ -544,6 +577,10 @@ export default function TicketsAdminPage() {
             <div style={styles.detailMeta}>
               <span>{`Requester: ${employees.find((employee) => employee.id === selectedTicket.employee_id)?.full_name || "Unknown"}`}</span>
               <span>{`Assigned: ${selectedTicketAssigneeName}`}</span>
+              <span>
+                <span style={{ ...styles.statusBadge, ...ticketStatusStyles(selectedTicket.status) }}>{selectedTicket.status}</span>
+                <span style={{ marginLeft: 10, ...styles.statusBadge, ...ticketPriorityStyles(selectedTicket.priority) }}>{selectedTicket.priority}</span>
+              </span>
             </div>
           </div>
 

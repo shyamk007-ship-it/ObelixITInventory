@@ -15,7 +15,6 @@ export type TicketPriority = typeof ticketPriorities[number];
 export const ticketStatuses = [
   "Open",
   "In Progress",
-  "Waiting",
   "Resolved",
   "Closed",
 ] as const;

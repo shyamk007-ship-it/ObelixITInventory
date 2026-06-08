@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -10,8 +9,10 @@ import { createAuditLog, createNotification, buildAuditDescription } from "../li
 import {
   ticketCategories,
   ticketPriorities,
+  ticketStatuses,
   type TicketCategory,
   type TicketPriority,
+  type TicketStatus,
 } from "../lib/helpdesk";
 
 interface AssignedAsset {
@@ -39,12 +40,15 @@ export default function EmployeePage() {
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [assignedAssets, setAssignedAssets] = useState<AssignedAsset[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [ticketComments, setTicketComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticketTitle, setTicketTitle] = useState("");
   const [ticketCategory, setTicketCategory] = useState<TicketCategory>(ticketCategories[0]);
   const [ticketPriority, setTicketPriority] = useState<TicketPriority>(ticketPriorities[1]);
   const [ticketAsset, setTicketAsset] = useState("");
   const [ticketDescription, setTicketDescription] = useState("");
+  const [ticketComment, setTicketComment] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -116,10 +120,78 @@ export default function EmployeePage() {
     setTickets(data || []);
   };
 
+  const loadTicketComments = async (ticketId: number) => {
+    const { data } = await supabase
+      .from("ticket_comments")
+      .select("id, author, content, created_at")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: true });
+
+    setTicketComments(data || []);
+  };
+
+  const handleSelectTicket = async (ticketId: number) => {
+    setSelectedTicketId(ticketId);
+    await loadTicketComments(ticketId);
+  };
+
+  const handleAddTicketComment = async () => {
+    if (!selectedTicket || !ticketComment.trim()) {
+      return;
+    }
+
+    const profile = await getUserProfile();
+    const { error } = await supabase.from("ticket_comments").insert([
+      {
+        ticket_id: selectedTicket.id,
+        author: profile?.full_name || "Unknown User",
+        content: ticketComment.trim(),
+      },
+    ]);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setTicketComment("");
+    await loadTicketComments(selectedTicket.id);
+  };
+
   const openTickets = useMemo(
     () => tickets.filter((ticket) => ticket.status === "Open").length,
     [tickets]
   );
+
+  const inProgressTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status === "In Progress").length,
+    [tickets]
+  );
+
+  const resolvedTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status === "Resolved").length,
+    [tickets]
+  );
+
+  const selectedTicket = useMemo(
+    () => tickets.find((ticket) => ticket.id === selectedTicketId) || null,
+    [tickets, selectedTicketId]
+  );
+
+  const statusBadgeStyles = (status: string) => {
+    switch (status) {
+      case "Open":
+        return { background: "#e0f2fe", color: "#0369a1" };
+      case "In Progress":
+        return { background: "#fef9c3", color: "#92400e" };
+      case "Resolved":
+        return { background: "#dcfce7", color: "#166534" };
+      case "Closed":
+        return { background: "#f5f3ff", color: "#5b21b6" };
+      default:
+        return { background: "#e2e8f0", color: "#334155" };
+    }
+  };
 
   const handleCreateTicket = async () => {
     if (!ticketTitle || !ticketDescription || !employeeId) {
@@ -212,9 +284,9 @@ export default function EmployeePage() {
 
         <div style={styles.header}>
           <div>
-            <h1 style={styles.title}>My Assignments</h1>
+            <h1 style={styles.title}>Helpdesk Dashboard</h1>
             <p style={styles.subtitle}>
-              View assets assigned to you, track support tickets, and review your ticket history.
+              Submit issues, track your tickets, and follow responses from the IT team.
             </p>
           </div>
         </div>
@@ -290,8 +362,17 @@ export default function EmployeePage() {
           </div>
 
           <div style={styles.ticketCard}>
-            <h2>My Ticket History</h2>
-            <p style={styles.ticketSummary}>{openTickets} open ticket(s)</p>
+            <div style={styles.ticketHistoryHeader}>
+              <div>
+                <h2>My Ticket History</h2>
+                <p style={styles.ticketSummary}>{openTickets} open · {inProgressTickets} in progress · {resolvedTickets} resolved</p>
+              </div>
+              <div style={styles.badgeGroup}>
+                <span style={{ ...styles.statusBadge, background: "#e0f2fe", color: "#0369a1" }}>Open</span>
+                <span style={{ ...styles.statusBadge, background: "#fef9c3", color: "#92400e" }}>In Progress</span>
+                <span style={{ ...styles.statusBadge, background: "#dcfce7", color: "#166534" }}>Resolved</span>
+              </div>
+            </div>
             <div style={styles.tableWrap}>
               <table style={styles.table}>
                 <thead>
@@ -312,10 +393,16 @@ export default function EmployeePage() {
                     </tr>
                   ) : (
                     tickets.map((ticket) => (
-                      <tr key={ticket.id}>
+                      <tr
+                        key={ticket.id}
+                        style={selectedTicketId === ticket.id ? styles.selectedRow : {}}
+                        onClick={() => handleSelectTicket(ticket.id)}
+                      >
                         <td style={styles.td}>{ticket.title}</td>
                         <td style={styles.td}>{ticket.priority}</td>
-                        <td style={styles.td}>{ticket.status}</td>
+                        <td style={styles.td}>
+                          <span style={{ ...styles.statusBadge, ...statusBadgeStyles(ticket.status) }}>{ticket.status}</span>
+                        </td>
                         <td style={styles.td}>
                           {assignedAssets.find((assignment) => assignment.asset_id === ticket.asset_id)?.assets?.[0]?.asset_name || "-"}
                         </td>
@@ -327,6 +414,60 @@ export default function EmployeePage() {
               </table>
             </div>
           </div>
+          {selectedTicket && (
+            <div style={styles.commentPanel}>
+              <h2>Ticket Details</h2>
+              <div style={styles.detailCard}>
+                <div style={styles.detailRow}>
+                  <strong>Subject</strong>
+                  <span>{selectedTicket.title}</span>
+                </div>
+                <div style={styles.detailRow}>
+                  <strong>Status</strong>
+                  <span style={{ ...styles.statusBadge, ...statusBadgeStyles(selectedTicket.status) }}>{selectedTicket.status}</span>
+                </div>
+                <div style={styles.detailRow}>
+                  <strong>Priority</strong>
+                  <span>{selectedTicket.priority}</span>
+                </div>
+                <div style={styles.detailRow}>
+                  <strong>Category</strong>
+                  <span>{selectedTicket.category}</span>
+                </div>
+                <div style={styles.detailRow}>
+                  <strong>Created</strong>
+                  <span>{new Date(selectedTicket.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <h3>Comments</h3>
+              <div style={styles.commentList}>
+                {ticketComments.length === 0 ? (
+                  <div style={styles.emptyState}>No ticket activity yet.</div>
+                ) : (
+                  ticketComments.map((comment) => (
+                    <div key={comment.id} style={styles.commentItem}>
+                      <div style={styles.commentHeader}>
+                        <strong>{comment.author}</strong>
+                        <span>{new Date(comment.created_at).toLocaleString()}</span>
+                      </div>
+                      <p style={styles.commentBody}>{comment.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <textarea
+                value={ticketComment}
+                onChange={(e) => setTicketComment(e.target.value)}
+                rows={4}
+                placeholder="Add a comment to this ticket"
+                style={styles.textarea}
+              />
+              <button type="button" onClick={handleAddTicketComment} style={styles.primaryButton}>
+                Post Comment
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={styles.tableWrap}>
@@ -422,6 +563,73 @@ const styles: any = {
     borderRadius: 18,
     padding: 24,
     boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+  },
+  ticketHistoryHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 16,
+    marginBottom: 18,
+  },
+  badgeGroup: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  selectedRow: {
+    background: "#eff6ff",
+  },
+  detailCard: {
+    background: "white",
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+    marginBottom: 20,
+  },
+  detailRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    marginBottom: 14,
+    color: "#334155",
+  },
+  commentPanel: {
+    marginTop: 20,
+  },
+  commentList: {
+    display: "grid",
+    gap: 12,
+    maxHeight: 360,
+    overflowY: "auto",
+    marginBottom: 14,
+  },
+  commentItem: {
+    background: "#f8fafc",
+    padding: 16,
+    borderRadius: 16,
+  },
+  commentHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    fontSize: 12,
+    color: "#334155",
+    marginBottom: 8,
+  },
+  commentBody: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.6,
+  },
+  statusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "6px 12px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 700,
   },
   ticketSummary: {
     marginTop: 8,
