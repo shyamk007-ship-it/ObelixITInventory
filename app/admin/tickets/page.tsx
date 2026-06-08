@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
 import {
   ticketCategories,
@@ -243,6 +243,15 @@ export default function TicketsAdminPage() {
       }),
     });
 
+    await createNotification({
+      title: "New ticket created",
+      message: `${newTicketTitle} has been opened for review.`,
+      action: "New Ticket",
+      createdBy: profile?.full_name,
+      recordType: "ticket",
+      recordId: createdTicket.id,
+    });
+
     setNewTicketTitle("");
     setNewTicketDescription("");
     setNewTicketAsset("");
@@ -286,6 +295,23 @@ export default function TicketsAdminPage() {
         itemName: selectedTicket.title,
         context: `Status: ${selectedStatus}, Priority: ${selectedPriority}`,
       }),
+    });
+
+    const assigneeChanged = selectedAssignee && selectedTicket.assigned_to !== Number(selectedAssignee);
+    const updateAction = selectedStatus === "Resolved" ? "Ticket Resolved" : assigneeChanged ? "Ticket Assigned" : "Ticket Updated";
+    const updateMessage = selectedStatus === "Resolved"
+      ? `${selectedTicket.title} has been resolved.`
+      : assigneeChanged
+      ? `${selectedTicket.title} has been assigned to staff member.`
+      : `${selectedTicket.title} has been updated.`;
+
+    await createNotification({
+      title: updateAction,
+      message: updateMessage,
+      action: updateAction,
+      createdBy: profile?.full_name,
+      recordType: "ticket",
+      recordId: selectedTicket.id,
     });
 
     await loadTickets();

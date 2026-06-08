@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { getUserProfile, isEmployee } from "../lib/rbac";
-import { createAuditLog, buildAuditDescription } from "../lib/audit";
+import { createAuditLog, createNotification, buildAuditDescription } from "../lib/audit";
 import {
   ticketCategories,
   ticketPriorities,
@@ -155,6 +155,15 @@ export default function EmployeePage() {
         recordId: data[0].id,
         itemName: ticketTitle,
       }),
+    });
+
+    await createNotification({
+      title: "New ticket submitted",
+      message: `${ticketTitle} was submitted by ${profile?.full_name || "an employee"}.`,
+      action: "New Ticket",
+      createdBy: profile?.full_name,
+      recordType: "ticket",
+      recordId: data[0].id,
     });
 
     setTicketTitle("");

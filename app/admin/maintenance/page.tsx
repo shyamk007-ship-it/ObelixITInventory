@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
 import { maintenanceStatuses } from "../../lib/helpdesk";
 
@@ -144,6 +144,15 @@ export default function MaintenanceAdminPage() {
         itemName: assets.find((asset) => asset.id === Number(selectedAsset))?.asset_name,
         context: `Vendor: ${vendor}`,
       }),
+    });
+
+    await createNotification({
+      title: "Maintenance due",
+      message: `${assets.find((asset) => asset.id === Number(selectedAsset))?.asset_name} is scheduled for maintenance on ${maintenanceDate}.`,
+      action: "Maintenance Due",
+      createdBy: profile?.full_name,
+      recordType: "asset_maintenance",
+      recordId: selectedAsset,
     });
 
     setSelectedAsset("");

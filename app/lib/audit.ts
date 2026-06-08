@@ -60,13 +60,45 @@ export const createNotification = async ({
 
   if (createdBy) payload.user_name = createdBy;
   if (recordType) payload.record_type = recordType;
-  if (recordId !== undefined) payload.record_id = recordId;
+  if (recordId !== undefined) payload.record_id = String(recordId);
 
   const { error } = await supabase.from("notifications").insert([payload]);
 
   if (error) {
-    // notifications table may be missing, continue silently
+    console.warn("Notification creation failed:", error.message);
   }
+};
+
+export const createNotificationIfNotExists = async ({
+  title,
+  message,
+  action,
+  createdBy,
+  recordType,
+  recordId,
+}: {
+  title: string;
+  message: string;
+  action: string;
+  createdBy?: string;
+  recordType?: string;
+  recordId?: string | number;
+}) => {
+  if (recordType && recordId !== undefined) {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("action", action)
+      .eq("record_type", recordType)
+      .eq("record_id", String(recordId))
+      .limit(1);
+
+    if (!error && data && data.length > 0) {
+      return;
+    }
+  }
+
+  await createNotification({ title, message, action, createdBy, recordType, recordId });
 };
 
 export const buildAuditDescription = ({

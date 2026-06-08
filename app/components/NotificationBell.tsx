@@ -2,110 +2,172 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { ticketNotificationActions } from "../lib/helpdesk";
-
-const NOTIFICATION_STORAGE_KEY = "itmanagement_notifications_last_seen";
-const notificationActions = [
-  "Assigned Asset",
-  "Returned Asset",
-  "Created Employee",
-  "Created Asset",
-  "Deleted Asset",
-  "Login",
-  "Logout",
-  "Created User",
-  ...ticketNotificationActions,
-];
+import { createNotificationIfNotExists } from "../lib/audit";
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [lastSeen, setLastSeen] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(NOTIFICATION_STORAGE_KEY);
-    setLastSeen(stored || "");
-    loadNotifications();
+    const initialize = async () => {
+      await scanDueNotifications();
+      await loadNotifications();
+    };
+
+    initialize();
+
+    const refreshInterval = window.setInterval(() => {
+      loadNotifications();
+    }, 30000);
 
     const channel = supabase
-      .channel("notification_channel")
+      .channel("notifications_live")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "activity_logs" },
-        (payload) => {
-          if (notificationActions.includes(payload.new.action)) {
-            loadNotifications();
-          }
+        { event: "INSERT", schema: "public", table: "notifications" },
+        () => {
+          loadNotifications();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications" },
+        () => {
+          loadNotifications();
         }
       )
       .subscribe();
 
     return () => {
+      window.clearInterval(refreshInterval);
       channel.unsubscribe();
     };
   }, []);
 
   const loadNotifications = async () => {
+    setLoading(true);
     const { data, error } = await supabase
-      .from("activity_logs")
-      .select("id, action, description, created_at")
-      .in("action", notificationActions)
+      .from("notifications")
+      .select("id, title, message, action, read, created_at")
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
 
+    setLoading(false);
     if (!error) {
       setNotifications(data || []);
     }
   };
 
-  const markAllAsRead = () => {
-    const now = new Date().toISOString();
-    window.localStorage.setItem(NOTIFICATION_STORAGE_KEY, now);
-    setLastSeen(now);
+  const scanDueNotifications = async () => {
+    const now = new Date();
+    const dueThreshold = new Date(now);
+    dueThreshold.setDate(now.getDate() + 30);
+
+    const { data: maintenanceData } = await supabase
+      .from("asset_maintenance")
+      .select("id, maintenance_date, assets(asset_name)")
+      .eq("status", "Pending");
+
+    if (maintenanceData) {
+      for (const record of maintenanceData) {
+        if (!record.maintenance_date) continue;
+        const maintenanceDate = new Date(record.maintenance_date);
+        if (maintenanceDate >= now && maintenanceDate <= dueThreshold) {
+          await createNotificationIfNotExists({
+            title: "Maintenance due",
+            message: `${record.assets?.asset_name || "Asset"} is due for maintenance on ${maintenanceDate.toLocaleDateString()}.`,
+            action: "Maintenance Due",
+            recordType: "asset_maintenance",
+            recordId: record.id,
+          });
+        }
+      }
+    }
+
+    const { data: warrantyData } = await supabase
+      .from("assets")
+      .select("id, asset_name, warranty_expiry");
+
+    if (warrantyData) {
+      for (const asset of warrantyData) {
+        if (!asset.warranty_expiry) continue;
+        const expiryDate = new Date(asset.warranty_expiry);
+        if (expiryDate >= now && expiryDate <= dueThreshold) {
+          await createNotificationIfNotExists({
+            title: "Warranty expiring soon",
+            message: `${asset.asset_name} warranty expires on ${expiryDate.toLocaleDateString()}.`,
+            action: "Warranty Expiring",
+            recordType: "asset",
+            recordId: asset.id,
+          });
+        }
+      }
+    }
   };
 
-  const unreadCount = notifications.filter((notification) => {
-    if (!lastSeen) return true;
-    return new Date(notification.created_at) > new Date(lastSeen);
-  }).length;
+  const markAllAsRead = async () => {
+    const unreadIds = notifications.filter((item) => !item.read).map((item) => item.id);
+    if (unreadIds.length === 0) {
+      return;
+    }
+
+    await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
+    await loadNotifications();
+  };
+
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
 
   return (
     <div style={styles.wrapper}>
       <button
         type="button"
         style={styles.bellButton}
-        onClick={() => {
+        onClick={async () => {
           setOpen(!open);
-          if (!open) markAllAsRead();
+          if (!open) {
+            await markAllAsRead();
+          }
         }}
         aria-label="Open notifications"
       >
         <span style={styles.bellIcon}>🔔</span>
-        {unreadCount > 0 && (
-          <span style={styles.badge}>{unreadCount}</span>
-        )}
+        {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
       </button>
 
       {open && (
         <div style={styles.dropdown}>
           <div style={styles.dropdownHeader}>
-            <strong>Notifications</strong>
-            <span style={styles.markRead} onClick={markAllAsRead}>
+            <div>
+              <strong>Notifications</strong>
+              <p style={styles.subtitle}>Recent updates and action alerts</p>
+            </div>
+            <button type="button" style={styles.markRead} onClick={markAllAsRead}>
               Mark all read
-            </span>
+            </button>
           </div>
-          {notifications.length === 0 ? (
-            <div style={styles.emptyState}>No recent notifications.</div>
+
+          {loading ? (
+            <div style={styles.emptyState}>Refreshing notifications...</div>
+          ) : notifications.length === 0 ? (
+            <div style={styles.emptyState}>No notifications yet.</div>
           ) : (
             notifications.map((item) => (
-              <div key={item.id} style={styles.notificationItem}>
-                <div>
-                  <strong style={styles.notificationTitle}>{item.action}</strong>
-                  <p style={styles.notificationDescription}>{item.description}</p>
+              <div
+                key={item.id}
+                style={{
+                  ...styles.notificationItem,
+                  background: item.read ? "#f8fafc" : "#eff6ff",
+                }}
+              >
+                <div style={styles.notificationMeta}>
+                  <span style={styles.notificationBadge}>{item.action}</span>
+                  <small style={styles.notificationTime}>
+                    {new Date(item.created_at).toLocaleString()}
+                  </small>
                 </div>
-                <small style={styles.notificationTime}>
-                  {new Date(item.created_at).toLocaleString()}
-                </small>
+                <strong style={styles.notificationTitle}>{item.title}</strong>
+                <p style={styles.notificationDescription}>{item.message}</p>
               </div>
             ))
           )}
@@ -132,7 +194,7 @@ const styles: any = {
     cursor: "pointer",
   },
   bellIcon: {
-    fontSize: 18,
+    fontSize: 20,
   },
   badge: {
     position: "absolute",
@@ -154,49 +216,71 @@ const styles: any = {
     position: "absolute",
     right: 0,
     top: 60,
-    width: 360,
-    maxHeight: 420,
+    width: 380,
+    maxHeight: 470,
     overflowY: "auto",
     background: "white",
     borderRadius: 20,
-    boxShadow: "0 20px 60px rgba(15, 23, 42, 0.18)",
+    boxShadow: "0 25px 80px rgba(15, 23, 42, 0.14)",
     border: "1px solid #e2e8f0",
     padding: 18,
     zIndex: 999,
-    animation: "fadeIn 180ms ease",
   },
   dropdownHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
+    alignItems: "flex-start",
+    gap: 14,
+    marginBottom: 16,
+  },
+  subtitle: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 13,
   },
   markRead: {
     fontSize: 12,
     color: "#2563eb",
+    border: "none",
+    background: "transparent",
     cursor: "pointer",
+    fontWeight: 700,
   },
   notificationItem: {
-    padding: 14,
-    borderRadius: 16,
-    background: "#f8fafc",
-    marginBottom: 12,
+    padding: 18,
+    borderRadius: 18,
+    marginBottom: 14,
+    border: "1px solid #e2e8f0",
+  },
+  notificationMeta: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 14,
+  },
+  notificationBadge: {
+    padding: "4px 10px",
+    borderRadius: 999,
+    background: "#e0f2fe",
+    color: "#0369a1",
+    fontSize: 12,
+    fontWeight: 700,
   },
   notificationTitle: {
     display: "block",
-    marginBottom: 6,
+    margin: "0 0 6px",
     fontWeight: 700,
     color: "#0f172a",
   },
   notificationDescription: {
     margin: 0,
     color: "#475569",
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 1.6,
   },
   notificationTime: {
-    display: "block",
-    marginTop: 10,
-    color: "#94a3b8",
+    color: "#64748b",
     fontSize: 12,
   },
   emptyState: {

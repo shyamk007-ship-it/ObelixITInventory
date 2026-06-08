@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
 
 interface Asset {
@@ -141,6 +141,15 @@ export default function AssignmentsPage() {
       }),
     });
 
+    await createNotification({
+      title: "Asset assigned",
+      message: `${assetName} was assigned to ${employeeName}.`,
+      action: "Assigned Asset",
+      createdBy: profile?.full_name,
+      recordType: "assignment",
+      recordId: assetId,
+    });
+
     setSelectedAsset("");
     setSelectedEmployee("");
     setAssignmentDate(todayDate);
@@ -186,6 +195,15 @@ export default function AssignmentsPage() {
         recordId: assignmentId,
         itemName: assetName,
       }),
+    });
+
+    await createNotification({
+      title: "Asset returned",
+      message: `${assetName} has been returned and is now available.`,
+      action: "Returned Asset",
+      createdBy: profile?.full_name,
+      recordType: "assignment",
+      recordId: assignmentId,
     });
 
     await loadAssets();
