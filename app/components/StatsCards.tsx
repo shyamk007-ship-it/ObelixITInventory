@@ -3,39 +3,26 @@
 export default function StatsCards({
   stats,
 }: any) {
+  const cards = [
+    { value: stats.totalAssets, label: "Total Assets" },
+    { value: stats.assignedAssets, label: "Assigned" },
+    { value: stats.availableAssets, label: "Available" },
+    { value: stats.employees, label: "Employees" },
+    stats.openTickets !== undefined && { value: stats.openTickets, label: "Open Tickets" },
+    stats.resolvedTickets !== undefined && { value: stats.resolvedTickets, label: "Resolved Tickets" },
+    stats.criticalIssues !== undefined && { value: stats.criticalIssues, label: "Critical Issues" },
+    stats.maintenanceDue !== undefined && { value: stats.maintenanceDue, label: "Maintenance Due" },
+    stats.warrantyExpiring !== undefined && { value: stats.warrantyExpiring, label: "Warranty Expiring" },
+  ].filter(Boolean);
+
   return (
     <div style={styles.grid}>
-      <div style={styles.card}>
-        <h1>
-          {stats.totalAssets}
-        </h1>
-
-        <p>Total Assets</p>
-      </div>
-
-      <div style={styles.card}>
-        <h1>
-          {stats.assignedAssets}
-        </h1>
-
-        <p>Assigned</p>
-      </div>
-
-      <div style={styles.card}>
-        <h1>
-          {stats.availableAssets}
-        </h1>
-
-        <p>Available</p>
-      </div>
-
-      <div style={styles.card}>
-        <h1>
-          {stats.employees}
-        </h1>
-
-        <p>Employees</p>
-      </div>
+      {cards.map((card: any) => (
+        <div key={card.label} style={styles.card}>
+          <h1>{card.value ?? 0}</h1>
+          <p>{card.label}</p>
+        </div>
+      ))}
     </div>
   );
 }

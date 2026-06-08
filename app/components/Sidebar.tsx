@@ -77,6 +77,18 @@ export default function Sidebar() {
               </Link>
             )}
 
+            <Link href="/admin/tickets" style={styles.link}>
+              Tickets
+            </Link>
+
+            <Link href="/admin/maintenance" style={styles.link}>
+              Maintenance
+            </Link>
+
+            <Link href="/admin/reports" style={styles.link}>
+              Reports
+            </Link>
+
             <Link href="/admin/activity" style={styles.link}>
               Activity
             </Link>
@@ -93,7 +105,7 @@ export default function Sidebar() {
               My Assignments
             </Link>
             <Link href="/employee" style={styles.link}>
-              My Profile
+              My Support
             </Link>
           </>
         )}

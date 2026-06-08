@@ -20,19 +20,21 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
-  const [stats, setStats] =
-    useState<any>({
-      totalAssets: 0,
-      assignedAssets: 0,
-      availableAssets: 0,
-      employees: 0,
-    });
+  const [stats, setStats] = useState<any>({
+    totalAssets: 0,
+    assignedAssets: 0,
+    availableAssets: 0,
+    employees: 0,
+    openTickets: 0,
+    resolvedTickets: 0,
+    criticalIssues: 0,
+    maintenanceDue: 0,
+    warrantyExpiring: 0,
+  });
 
-  const [logs, setLogs] =
-    useState<any[]>([]);
-
-  const [recentAssets, setRecentAssets] =
-    useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [recentAssets, setRecentAssets] = useState<any[]>([]);
+  const [ticketCategoryData, setTicketCategoryData] = useState<any[]>([]);
 
   useEffect(() => {
     let realtimeChannel: any = null;
@@ -65,6 +67,27 @@ export default function Dashboard() {
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "assets" },
+          async () => {
+            await loadDashboard();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "tickets" },
+          async () => {
+            await loadDashboard();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "tickets" },
+          async () => {
+            await loadDashboard();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "asset_maintenance" },
           async () => {
             await loadDashboard();
           }
@@ -108,79 +131,77 @@ export default function Dashboard() {
 
   // LOAD DASHBOARD
   const loadDashboard = async () => {
-    // TOTAL ASSETS
-    const {
-      count: totalAssets,
-    } = await supabase
-      .from("assets")
-      .select("*", {
-        count: "exact",
-        head: true,
-      });
+    const { count: totalAssets } = await supabase.from("assets").select("*", {
+      count: "exact",
+      head: true,
+    });
 
-    // ASSIGNED ASSETS
-    const {
-      count: assignedAssets,
-    } = await supabase
-      .from("assets")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq("status", "Assigned");
+    const { count: assignedAssets } = await supabase.from("assets").select("*", {
+      count: "exact",
+      head: true,
+    }).eq("status", "Assigned");
 
-    // AVAILABLE ASSETS
-    const {
-      count:
-        availableAssets,
-    } = await supabase
-      .from("assets")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq(
-        "status",
-        "Available"
-      );
+    const { count: availableAssets } = await supabase.from("assets").select("*", {
+      count: "exact",
+      head: true,
+    }).eq("status", "Available");
 
-    // EMPLOYEES
-    const {
-      count: employees,
-    } = await supabase
-      .from("employees")
-      .select("*", {
-        count: "exact",
-        head: true,
-      });
+    const { count: employees } = await supabase.from("employees").select("*", {
+      count: "exact",
+      head: true,
+    });
 
-    // RECENT ASSETS
-    const {
-      data: recentData,
-    } = await supabase
+    const { data: recentData } = await supabase
       .from("assets")
       .select("*")
-      .order("created_at", {
-        ascending: false,
-      })
+      .order("created_at", { ascending: false })
       .limit(5);
 
-    setRecentAssets(
-      recentData || []
-    );
+    const { data: ticketsData } = await supabase
+      .from("tickets")
+      .select("category, status, priority");
 
+    const openTickets = (ticketsData || []).filter((ticket) => ticket.status === "Open").length;
+    const resolvedTickets = (ticketsData || []).filter((ticket) => ticket.status === "Resolved").length;
+    const criticalIssues = (ticketsData || []).filter((ticket) => ticket.priority === "Critical").length;
+
+    const categoryCounts = (ticketsData || []).reduce((groups: Record<string, number>, ticket) => {
+      const category = ticket.category || "Other";
+      groups[category] = (groups[category] || 0) + 1;
+      return groups;
+    }, {});
+
+    const ticketCategoryData = Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
+
+    const { data: maintenanceData } = await supabase.from("asset_maintenance").select("maintenance_date");
+    const dueMaintenance = (maintenanceData || []).filter((record) => {
+      const maintenanceDate = new Date(record.maintenance_date);
+      const now = new Date();
+      const delta = (maintenanceDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      return delta >= 0 && delta <= 30;
+    }).length;
+
+    const { data: warrantyAssets } = await supabase.from("assets").select("warranty_expiry");
+    const warrantyExpiring = (warrantyAssets || []).filter((asset) => {
+      if (!asset.warranty_expiry) return false;
+      const expiry = new Date(asset.warranty_expiry);
+      const now = new Date();
+      const delta = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      return delta >= 0 && delta <= 30;
+    }).length;
+
+    setRecentAssets(recentData || []);
+    setTicketCategoryData(ticketCategoryData);
     setStats({
-      totalAssets:
-        totalAssets || 0,
-
-      assignedAssets:
-        assignedAssets || 0,
-
-      availableAssets:
-        availableAssets || 0,
-
-      employees:
-        employees || 0,
+      totalAssets: totalAssets || 0,
+      assignedAssets: assignedAssets || 0,
+      availableAssets: availableAssets || 0,
+      employees: employees || 0,
+      openTickets,
+      resolvedTickets,
+      criticalIssues,
+      maintenanceDue: dueMaintenance,
+      warrantyExpiring,
     });
   };
 
@@ -284,6 +305,44 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <div style={styles.grid}>
+          <div style={styles.chartCard}>
+            <h2>Support Tickets by Category</h2>
+            {ticketCategoryData.length === 0 ? (
+              <div style={styles.emptyState}>No ticket data yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={340}>
+                <PieChart>
+                  <Pie data={ticketCategoryData} dataKey="value" cx="50%" cy="50%" outerRadius={100} label>
+                    {ticketCategoryData.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          <div style={styles.chartCard}>
+            <h2>Maintenance & Warranty</h2>
+            <div style={styles.summaryGrid}>
+              <div style={styles.summaryCard}>
+                <p>Upcoming Maintenance</p>
+                <strong>{stats.maintenanceDue}</strong>
+              </div>
+              <div style={styles.summaryCard}>
+                <p>Warranty Expiring</p>
+                <strong>{stats.warrantyExpiring}</strong>
+              </div>
+            </div>
+            <div style={styles.summaryDetail}>
+              <p style={styles.summaryLabel}>Critical Tickets</p>
+              <strong style={styles.summaryValue}>{stats.criticalIssues}</strong>
+            </div>
+          </div>
+        </div>
+
         {/* ACTIVITY */}
         <ActivityFeed
           logs={logs}
@@ -323,5 +382,40 @@ const styles: any = {
     borderRadius: 16,
     boxShadow:
       "0 4px 20px rgba(0,0,0,0.08)",
+  },
+
+  emptyState: {
+    padding: 22,
+    color: "#64748b",
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+    marginTop: 20,
+  },
+
+  summaryCard: {
+    background: "#f8fafc",
+    padding: 18,
+    borderRadius: 16,
+  },
+
+  summaryDetail: {
+    marginTop: 24,
+    padding: 18,
+    borderRadius: 16,
+    background: "#f8fafc",
+  },
+
+  summaryLabel: {
+    margin: 0,
+    color: "#64748b",
+  },
+
+  summaryValue: {
+    fontSize: 32,
+    color: "#0f172a",
   },
 };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { ticketNotificationActions } from "../lib/helpdesk";
 
 const NOTIFICATION_STORAGE_KEY = "itmanagement_notifications_last_seen";
 const notificationActions = [
@@ -13,6 +14,7 @@ const notificationActions = [
   "Login",
   "Logout",
   "Created User",
+  ...ticketNotificationActions,
 ];
 
 export default function NotificationBell() {
