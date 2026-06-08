@@ -6,7 +6,7 @@ export default function Sidebar() {
   return (
     <div style={styles.sidebar}>
       <h2 style={styles.logo}>
-        Obelix IT
+        IT Managements
       </h2>
 
       <nav style={styles.nav}>

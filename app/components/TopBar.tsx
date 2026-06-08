@@ -10,12 +10,8 @@ export default function TopBar() {
     <div style={styles.topbar}>
       <div>
         <h1 style={styles.title}>
-          IT Asset Dashboard
+          IT Managements Dashboard
         </h1>
-
-        <p style={styles.subtitle}>
-          Jira-style Asset Management
-        </p>
       </div>
 
       <div style={styles.right}>
@@ -49,14 +45,9 @@ const styles: any = {
   },
 
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
+    fontSize: 40,
+    fontWeight: 900,
     color: "#0f172a",
-  },
-
-  subtitle: {
-    color: "#64748b",
-    marginTop: 6,
   },
 
   right: {
