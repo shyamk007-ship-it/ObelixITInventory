@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../../lib/audit";
-import { getUserProfile } from "../../../lib/rbac";
+import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { getUserProfile } from "../../lib/rbac";
 import {
   ticketCategories,
   ticketPriorities,
   ticketStatuses,
-} from "../../../lib/helpdesk";
+  type TicketCategory,
+  type TicketPriority,
+  type TicketStatus,
+} from "../../lib/helpdesk";
 
 interface Asset {
   id: number;
@@ -30,9 +33,9 @@ interface Ticket {
   id: number;
   title: string;
   description: string;
-  category: string;
-  priority: string;
-  status: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
   asset_id?: number | null;
   employee_id?: number | null;
   assigned_to?: number | null;
@@ -59,14 +62,14 @@ export default function TicketsAdminPage() {
   const [filterStatus, setFilterStatus] = useState<string>("All");
   const [filterPriority, setFilterPriority] = useState<string>("All");
   const [newTicketTitle, setNewTicketTitle] = useState("");
-  const [newTicketCategory, setNewTicketCategory] = useState(ticketCategories[0]);
-  const [newTicketPriority, setNewTicketPriority] = useState(ticketPriorities[1]);
+  const [newTicketCategory, setNewTicketCategory] = useState<TicketCategory>(ticketCategories[0]);
+  const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority>(ticketPriorities[1]);
   const [newTicketAsset, setNewTicketAsset] = useState("");
   const [newTicketEmployee, setNewTicketEmployee] = useState("");
   const [newTicketDescription, setNewTicketDescription] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<string>(ticketStatuses[0]);
-  const [selectedPriority, setSelectedPriority] = useState<string>(ticketPriorities[1]);
+  const [selectedStatus, setSelectedStatus] = useState<TicketStatus>(ticketStatuses[0]);
+  const [selectedPriority, setSelectedPriority] = useState<TicketPriority>(ticketPriorities[1]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -377,7 +380,7 @@ export default function TicketsAdminPage() {
               />
               <select
                 value={newTicketCategory}
-                onChange={(e) => setNewTicketCategory(e.target.value)}
+                onChange={(e) => setNewTicketCategory(e.target.value as TicketCategory)}
                 style={styles.select}
               >
                 {ticketCategories.map((category) => (
@@ -388,7 +391,7 @@ export default function TicketsAdminPage() {
               </select>
               <select
                 value={newTicketPriority}
-                onChange={(e) => setNewTicketPriority(e.target.value)}
+                onChange={(e) => setNewTicketPriority(e.target.value as TicketPriority)}
                 style={styles.select}
               >
                 {ticketPriorities.map((priority) => (
@@ -523,7 +526,7 @@ export default function TicketsAdminPage() {
               <label style={styles.fieldLabel}>Status</label>
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => setSelectedStatus(e.target.value as TicketStatus)}
                 style={styles.select}
               >
                 {ticketStatuses.map((status) => (
@@ -536,7 +539,7 @@ export default function TicketsAdminPage() {
               <label style={styles.fieldLabel}>Priority</label>
               <select
                 value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value)}
+                onChange={(e) => setSelectedPriority(e.target.value as TicketPriority)}
                 style={styles.select}
               >
                 {ticketPriorities.map((priority) => (

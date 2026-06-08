@@ -2,9 +2,9 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "../../components/Sidebar";
-import TopBar from "../../components/TopBar";
-import { getUserProfile, canAccessAdmin, isEmployee } from "../../lib/rbac";
+import Sidebar from "../components/Sidebar";
+import TopBar from "../components/TopBar";
+import { getUserProfile, canAccessAdmin, isEmployee } from "../lib/rbac";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [authorized, setAuthorized] = useState(false);

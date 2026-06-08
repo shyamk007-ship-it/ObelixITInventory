@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../../lib/audit";
-import { getUserProfile } from "../../../lib/rbac";
-import { maintenanceStatuses } from "../../../lib/helpdesk";
+import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { getUserProfile } from "../../lib/rbac";
+import { maintenanceStatuses } from "../../lib/helpdesk";
 
 interface Asset {
   id: number;

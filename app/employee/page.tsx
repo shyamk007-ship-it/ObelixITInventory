@@ -7,7 +7,12 @@ import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { getUserProfile, isEmployee } from "../lib/rbac";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
-import { ticketCategories, ticketPriorities } from "../lib/helpdesk";
+import {
+  ticketCategories,
+  ticketPriorities,
+  type TicketCategory,
+  type TicketPriority,
+} from "../lib/helpdesk";
 
 interface AssignedAsset {
   id: number;
@@ -16,7 +21,7 @@ interface AssignedAsset {
   returned_date?: string | null;
   status: string;
   notes?: string;
-  assets?: { asset_name: string; asset_tag?: string; serial_number?: string };
+  assets?: { asset_name: string; asset_tag?: string; serial_number?: string }[];
 }
 
 interface Ticket {
@@ -36,8 +41,8 @@ export default function EmployeePage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticketTitle, setTicketTitle] = useState("");
-  const [ticketCategory, setTicketCategory] = useState(ticketCategories[0]);
-  const [ticketPriority, setTicketPriority] = useState(ticketPriorities[1]);
+  const [ticketCategory, setTicketCategory] = useState<TicketCategory>(ticketCategories[0]);
+  const [ticketPriority, setTicketPriority] = useState<TicketPriority>(ticketPriorities[1]);
   const [ticketAsset, setTicketAsset] = useState("");
   const [ticketDescription, setTicketDescription] = useState("");
   const router = useRouter();
@@ -92,7 +97,7 @@ export default function EmployeePage() {
   const loadAssignedAssets = async (employeeId: number) => {
     const { data } = await supabase
       .from("asset_assignments")
-      .select("id,assigned_date,returned_date,status,notes,assets(asset_name,asset_tag,serial_number)")
+      .select("id,asset_id,assigned_date,returned_date,status,notes,assets(asset_name,asset_tag,serial_number)")
       .eq("employee_id", employeeId)
       .order("assigned_date", { ascending: false });
 
@@ -228,7 +233,7 @@ export default function EmployeePage() {
               />
               <select
                 value={ticketCategory}
-                onChange={(e) => setTicketCategory(e.target.value)}
+                onChange={(e) => setTicketCategory(e.target.value as TicketCategory)}
                 style={styles.select}
               >
                 {ticketCategories.map((category) => (
@@ -239,7 +244,7 @@ export default function EmployeePage() {
               </select>
               <select
                 value={ticketPriority}
-                onChange={(e) => setTicketPriority(e.target.value)}
+                onChange={(e) => setTicketPriority(e.target.value as TicketPriority)}
                 style={styles.select}
               >
                 {ticketPriorities.map((priority) => (
@@ -256,7 +261,7 @@ export default function EmployeePage() {
                 <option value="">Related asset (optional)</option>
                 {assignedAssets.map((assignment) => (
                   <option key={assignment.id} value={assignment.asset_id}>
-                    {assignment.assets?.asset_name}
+                    {assignment.assets?.[0]?.asset_name || "Unknown Asset"}
                   </option>
                 ))}
               </select>
@@ -301,7 +306,7 @@ export default function EmployeePage() {
                         <td style={styles.td}>{ticket.priority}</td>
                         <td style={styles.td}>{ticket.status}</td>
                         <td style={styles.td}>
-                          {assignedAssets.find((assignment) => assignment.asset_id === ticket.asset_id)?.assets?.asset_name || "-"}
+                          {assignedAssets.find((assignment) => assignment.asset_id === ticket.asset_id)?.assets?.[0]?.asset_name || "-"}
                         </td>
                         <td style={styles.td}>{new Date(ticket.created_at).toLocaleDateString()}</td>
                       </tr>
@@ -335,7 +340,7 @@ export default function EmployeePage() {
                 assignedAssets.map((assignment) => (
                   <tr key={assignment.id}>
                     <td style={styles.td}>
-                      {assignment.assets?.asset_name || "Unknown Asset"}
+                      {assignment.assets?.[0]?.asset_name || "Unknown Asset"}
                     </td>
                     <td style={styles.td}>{formatDate(assignment.assigned_date)}</td>
                     <td style={styles.td}>{formatDate(assignment.returned_date)}</td>

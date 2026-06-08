@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
-import { ticketCategories, ticketPriorities } from "../../../lib/helpdesk";
+import { supabase } from "../../lib/supabase";
+import { ticketCategories, ticketPriorities } from "../../lib/helpdesk";
 
 export default function ReportsPage() {
   const [ticketCount, setTicketCount] = useState(0);

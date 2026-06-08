@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
-import { getUserProfile, Role } from "../../../lib/rbac";
-import Sidebar from "../../../components/Sidebar";
-import TopBar from "../../../components/TopBar";
+import { supabase } from "../../lib/supabase";
+import { getUserProfile, Role } from "../../lib/rbac";
+import Sidebar from "../../components/Sidebar";
+import TopBar from "../../components/TopBar";
 
 const actions = [
   "Assigned Asset",
