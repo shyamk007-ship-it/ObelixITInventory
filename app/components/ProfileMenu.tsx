@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { getUserProfile, roleLabel, Role } from "../lib/rbac";
+import { createAuditLog, buildAuditDescription } from "../lib/audit";
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
@@ -29,6 +30,16 @@ export default function ProfileMenu() {
   }, [router]);
 
   const handleLogout = async () => {
+    await createAuditLog({
+      action: "Logout",
+      description: buildAuditDescription({
+        event: "Logout",
+        userName,
+        recordType: "user",
+        itemName: userName,
+      }),
+    });
+
     await supabase.auth.signOut();
     router.push("/login");
   };

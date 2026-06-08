@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
 
 export default function UsersPage() {
   const [authorized, setAuthorized] =
@@ -71,19 +72,30 @@ export default function UsersPage() {
 
   // CREATE USER
   const createUser = async () => {
-    const { error } =
+    const { data, error } =
       await supabase.from("users").insert([
         {
           full_name: fullName,
           email,
           role,
         },
-      ]);
+      ]).select();
 
     if (error) {
       alert(error.message);
       return;
     }
+
+    await createAuditLog({
+      action: "Created User",
+      description: buildAuditDescription({
+        event: "Created User",
+        userName: fullName,
+        recordType: "user",
+        recordId: data?.[0]?.id,
+        itemName: email,
+      }),
+    });
 
     alert("User created ✅");
 

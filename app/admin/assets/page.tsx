@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { getUserProfile } from "../../lib/rbac";
 
 interface Asset {
   id: number;
@@ -51,7 +53,7 @@ export default function AssetsPage() {
       return;
     }
 
-    const { error } = await supabase.from("assets").insert([
+    const { data, error } = await supabase.from("assets").insert([
       {
         asset_name: assetName,
         asset_tag: assetTag,
@@ -61,7 +63,7 @@ export default function AssetsPage() {
         serial_number: serialNumber,
         status: "Available",
       },
-    ]);
+    ]).select();
 
     if (error) {
       console.error(error);
@@ -69,12 +71,17 @@ export default function AssetsPage() {
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Created Asset",
-        description: `${assetName} added`,
-      },
-    ]);
+    const profile = await getUserProfile();
+    await createAuditLog({
+      action: "Created Asset",
+      description: buildAuditDescription({
+        event: "Created Asset",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "asset",
+        recordId: data?.[0]?.id,
+        itemName: assetName,
+      }),
+    });
 
     setAssetName("");
     setAssetTag("");
@@ -97,12 +104,17 @@ export default function AssetsPage() {
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Deleted Asset",
-        description: `${name} deleted`,
-      },
-    ]);
+    const profile = await getUserProfile();
+    await createAuditLog({
+      action: "Deleted Asset",
+      description: buildAuditDescription({
+        event: "Deleted Asset",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "asset",
+        recordId: id,
+        itemName: name,
+      }),
+    });
 
     await loadAssets();
   };

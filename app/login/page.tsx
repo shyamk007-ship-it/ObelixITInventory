@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { getUserProfile, isEmployee } from "../lib/rbac";
+import { createAuditLog, buildAuditDescription } from "../lib/audit";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,6 +29,18 @@ export default function LoginPage() {
     }
 
     const profile = await getUserProfile();
+
+    await createAuditLog({
+      action: "Login",
+      description: buildAuditDescription({
+        event: "Login",
+        userName: profile?.full_name || email,
+        recordType: "user",
+        recordId: profile?.id,
+        itemName: profile?.email,
+      }),
+    });
+
     setLoading(false);
 
     if (profile && isEmployee(profile.role)) {

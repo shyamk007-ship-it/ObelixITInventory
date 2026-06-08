@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { getUserProfile } from "../../lib/rbac";
 
 interface Asset {
   id: number;
@@ -123,12 +125,21 @@ export default function AssignmentsPage() {
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Assigned Asset",
-        description: `Asset assigned to employee`,
-      },
-    ]);
+    const profile = await getUserProfile();
+    const assetName = assets.find((item) => item.id === assetId)?.asset_name || "Asset";
+    const employeeName = employees.find((item) => item.id === employeeId)?.full_name || "Employee";
+
+    await createAuditLog({
+      action: "Assigned Asset",
+      description: buildAuditDescription({
+        event: "Assigned Asset",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "assignment",
+        recordId: assetId,
+        itemName: `${assetName} → ${employeeName}`,
+        context: notes ? `Notes: ${notes}` : undefined,
+      }),
+    });
 
     setSelectedAsset("");
     setSelectedEmployee("");
@@ -163,12 +174,19 @@ export default function AssignmentsPage() {
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Returned Asset",
-        description: `Asset returned`,
-      },
-    ]);
+    const profile = await getUserProfile();
+    const assetName = assignments.find((item) => item.asset_id === assetId)?.assets?.asset_name || "Asset";
+
+    await createAuditLog({
+      action: "Returned Asset",
+      description: buildAuditDescription({
+        event: "Returned Asset",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "assignment",
+        recordId: assignmentId,
+        itemName: assetName,
+      }),
+    });
 
     await loadAssets();
     await loadAssignments();

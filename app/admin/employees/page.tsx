@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { getUserProfile } from "../../lib/rbac";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -35,26 +37,31 @@ export default function EmployeesPage() {
       return;
     }
 
-    const { error } = await supabase.from("employees").insert([
+    const { data, error } = await supabase.from("employees").insert([
       {
         full_name: fullName,
         email,
         department,
         position,
       },
-    ]);
+    ]).select();
 
     if (error) {
       alert(error.message);
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Created Employee",
-        description: fullName + " added",
-      },
-    ]);
+    const profile = await getUserProfile();
+    await createAuditLog({
+      action: "Created Employee",
+      description: buildAuditDescription({
+        event: "Created Employee",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "employee",
+        recordId: data?.[0]?.id,
+        itemName: fullName,
+      }),
+    });
 
     alert("Employee Added ✅");
     setFullName("");
@@ -75,12 +82,17 @@ export default function EmployeesPage() {
       return;
     }
 
-    await supabase.from("activity_logs").insert([
-      {
-        action: "Deleted Employee",
-        description: name + " deleted",
-      },
-    ]);
+    const profile = await getUserProfile();
+    await createAuditLog({
+      action: "Deleted Employee",
+      description: buildAuditDescription({
+        event: "Deleted Employee",
+        userName: profile?.full_name || "Unknown User",
+        recordType: "employee",
+        recordId: id,
+        itemName: name,
+      }),
+    });
 
     loadEmployees();
   };
