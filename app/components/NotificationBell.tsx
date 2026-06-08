@@ -75,7 +75,6 @@ export default function NotificationBell() {
         const maintenanceDate = new Date(record.maintenance_date);
         if (maintenanceDate >= now && maintenanceDate <= dueThreshold) {
           const assetName =
-            record.assets?.asset_name ||
             record.assets?.[0]?.asset_name ||
             "Asset";
 
