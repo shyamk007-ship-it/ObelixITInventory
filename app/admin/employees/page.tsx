@@ -43,6 +43,7 @@ export default function EmployeesPage() {
         email,
         department,
         position,
+        role: "employee",
       },
     ]).select();
 

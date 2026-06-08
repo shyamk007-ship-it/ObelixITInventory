@@ -61,11 +61,13 @@ export default function EmployeePage() {
         return;
       }
 
+      const normalizedEmail = currentProfile.email?.trim().toLowerCase() || "";
+
       const { data: employee, error } = await supabase
         .from("employees")
         .select("id, full_name, email, department, position")
-        .eq("email", currentProfile.email)
-        .single();
+        .ilike("email", normalizedEmail)
+        .maybeSingle();
 
       if (error || !employee) {
         setProfile({

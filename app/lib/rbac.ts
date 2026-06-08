@@ -44,18 +44,52 @@ export async function getUserProfile(): Promise<UserProfile | null> {
     return null;
   }
 
-  const { data } = await supabase
-    .from("users")
-    .select("id, full_name, email, role")
-    .eq("email", user.email)
-    .single();
+  const normalizedEmail = user.email.trim().toLowerCase();
 
-  const role = normalizeRole(data?.role ?? user.user_metadata?.role ?? "employee");
+  const tryQuery = async (table: string) => {
+    const { data, error } = await supabase
+      .from(table)
+      .select("id, full_name, email, role")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
+
+    return { data, error };
+  };
+
+  const userTable = await tryQuery("users");
+  if (!userTable.error && userTable.data) {
+    return {
+      id: userTable.data.id ?? 0,
+      email: userTable.data.email || user.email,
+      full_name: userTable.data.full_name || user.user_metadata?.full_name || user.email,
+      role: normalizeRole(userTable.data.role ?? user.user_metadata?.role ?? "employee"),
+    };
+  }
+
+  const usersProfilesTable = await tryQuery("users_profiles");
+  if (!usersProfilesTable.error && usersProfilesTable.data) {
+    return {
+      id: usersProfilesTable.data.id ?? 0,
+      email: usersProfilesTable.data.email || user.email,
+      full_name: usersProfilesTable.data.full_name || user.user_metadata?.full_name || user.email,
+      role: normalizeRole(usersProfilesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+    };
+  }
+
+  const employeesTable = await tryQuery("employees");
+  if (!employeesTable.error && employeesTable.data) {
+    return {
+      id: employeesTable.data.id ?? 0,
+      email: employeesTable.data.email || user.email,
+      full_name: employeesTable.data.full_name || user.user_metadata?.full_name || user.email,
+      role: normalizeRole(employeesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+    };
+  }
 
   return {
-    id: data?.id ?? 0,
+    id: 0,
     email: user.email,
-    full_name: data?.full_name || user.user_metadata?.full_name || user.email,
-    role,
+    full_name: user.user_metadata?.full_name || user.email,
+    role: normalizeRole(user.user_metadata?.role ?? "employee"),
   };
 }
