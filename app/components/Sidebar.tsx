@@ -63,6 +63,10 @@ export default function Sidebar() {
               🚢 Vessels
             </Link>
 
+            <Link href="/admin/checklists" style={styles.link}>
+              📝 IT Checklist
+            </Link>
+
             {canManageAssets(role) && (
               <Link href="/admin/assets" style={styles.link}>
                 Assets
