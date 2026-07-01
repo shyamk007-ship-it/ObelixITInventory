@@ -104,7 +104,7 @@ export default function ChecklistsPage() {
     try {
       const [vesselsResponse, entriesResponse] = await Promise.all([
         supabase.from("vessels").select("id, vessel_name").order("vessel_name", { ascending: true }),
-        supabase.from("vessel_checklists").select("*, vessels(vessel_name)").order("checklist_date", { ascending: false }),
+        supabase.from("vessel_it_checklists").select("*, vessels(vessel_name)").order("checklist_date", { ascending: false }),
       ]);
 
       if (!vesselsResponse.error) {
@@ -146,7 +146,7 @@ export default function ChecklistsPage() {
         remarks: remarks || null,
       };
 
-      const { data, error } = await supabase.from("vessel_checklists").insert([payload]).select();
+      const { data, error } = await supabase.from("vessel_it_checklists").insert([payload]).select();
       if (error) throw error;
 
       const checklistId = data?.[0]?.id;
@@ -157,7 +157,7 @@ export default function ChecklistsPage() {
         remarks: item.remarks || null,
       }));
 
-      const { error: itemError } = await supabase.from("vessel_checklist_items").insert(itemPayload);
+      const { error: itemError } = await supabase.from("vessel_it_checklist_items").insert(itemPayload);
       if (itemError) throw itemError;
 
       if (failedItems.length) {
