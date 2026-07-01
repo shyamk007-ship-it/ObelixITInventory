@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../../lib/supabase";
-import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { createAuditLog, buildAuditDescription, createNotificationIfNotExists } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
 
 interface Vessel {
@@ -88,6 +88,7 @@ export default function AssetsPage() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [transfers, setTransfers] = useState<AssetTransfer[]>([]);
+  const [lifecycleEvents, setLifecycleEvents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [vesselFilter, setVesselFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -112,17 +113,23 @@ export default function AssetsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [assetsResponse, vesselsResponse, employeesResponse, transfersResponse] = await Promise.all([
+      const [assetsResponse, vesselsResponse, employeesResponse, transfersResponse, lifecycleResponse] = await Promise.all([
         supabase.from("assets").select("*, vessels(vessel_name)").order("asset_name", { ascending: true }),
         supabase.from("vessels").select("id, vessel_name").order("vessel_name", { ascending: true }),
         supabase.from("employees").select("id, full_name").order("full_name", { ascending: true }),
         supabase.from("asset_transfers").select("*, assets(asset_name, asset_tag), from_vessel:vessels!asset_transfers_from_vessel_id_fkey(vessel_name), to_vessel:vessels!asset_transfers_to_vessel_id_fkey(vessel_name)").order("transferred_at", { ascending: false }),
+        supabase.from("asset_lifecycle_events").select("*").order("event_timestamp", { ascending: false }),
       ]);
 
-      if (!assetsResponse.error) setAssets((assetsResponse.data as Asset[]) || []);
+      if (!assetsResponse.error) {
+        const assetData = (assetsResponse.data as Asset[]) || [];
+        setAssets(assetData);
+        await createWarrantyNotifications(assetData);
+      }
       if (!vesselsResponse.error) setVessels((vesselsResponse.data as Vessel[]) || []);
       if (!employeesResponse.error) setEmployees((employeesResponse.data as Employee[]) || []);
       if (!transfersResponse.error) setTransfers((transfersResponse.data as AssetTransfer[]) || []);
+      if (!lifecycleResponse.error) setLifecycleEvents((lifecycleResponse.data as any[]) || []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -376,6 +383,26 @@ export default function AssetsPage() {
     }));
   }, [vesselAssets]);
 
+  const widgetSummary = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    return {
+      inRepair: vesselAssets.filter((asset) => asset.status === "In Maintenance").length,
+      inTransit: vesselAssets.filter((asset) => asset.status === "In Transit").length,
+      warrantyExpiring: vesselAssets.filter((asset) => {
+        if (!asset.warranty_expiry) return false;
+        const expiry = new Date(asset.warranty_expiry);
+        const diff = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        return diff >= 0 && diff <= 30;
+      }).length,
+      recentlyAssigned: vesselAssets.filter((asset) => asset.status === "Assigned").length,
+      recentlyReturned: vesselAssets.filter((asset) => asset.status === "Available" && asset.created_at && new Date(asset.created_at) >= thirtyDaysAgo).length,
+      newPurchases: vesselAssets.filter((asset) => asset.created_at && new Date(asset.created_at) >= thirtyDaysAgo).length,
+      disposedAssets: vesselAssets.filter((asset) => asset.status === "Retired").length,
+    };
+  }, [vesselAssets]);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -437,6 +464,16 @@ export default function AssetsPage() {
           <p style={styles.summaryLabel}>Warranty Expiring</p>
           <strong style={styles.summaryValue}>{vesselSummary.warrantyExpiring}</strong>
         </div>
+      </div>
+
+      <div style={styles.summaryGrid}>
+        <WidgetCard label="Assets in Repair" value={widgetSummary.inRepair} />
+        <WidgetCard label="Assets in Transit" value={widgetSummary.inTransit} />
+        <WidgetCard label="Warranty Expiring" value={widgetSummary.warrantyExpiring} />
+        <WidgetCard label="Recently Assigned" value={widgetSummary.recentlyAssigned} />
+        <WidgetCard label="Recently Returned" value={widgetSummary.recentlyReturned} />
+        <WidgetCard label="New Purchases" value={widgetSummary.newPurchases} />
+        <WidgetCard label="Disposed Assets" value={widgetSummary.disposedAssets} />
       </div>
 
       <div style={styles.dashboardGrid}>
@@ -559,7 +596,11 @@ export default function AssetsPage() {
               <tbody>
                 {filteredAssets.map((asset) => (
                   <tr key={asset.id} style={styles.row}>
-                    <td style={styles.td}>{asset.asset_name}</td>
+                    <td style={styles.td}>
+                      <button style={styles.linkButton} onClick={() => window.location.href = `/admin/assets/${asset.id}`}>
+                        {asset.asset_name}
+                      </button>
+                    </td>
                     <td style={styles.td}>{asset.asset_tag}</td>
                     <td style={styles.td}>{asset.vessels?.vessel_name || "Unassigned"}</td>
                     <td style={styles.td}>{asset.category || "—"}</td>
@@ -664,6 +705,35 @@ export default function AssetsPage() {
       </div>
     </div>
   );
+}
+
+function WidgetCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={styles.summaryCard}>
+      <p style={styles.summaryLabel}>{label}</p>
+      <strong style={styles.summaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+async function createWarrantyNotifications(assets: Asset[]) {
+  const now = new Date();
+  const dueThreshold = new Date(now);
+  dueThreshold.setDate(now.getDate() + 30);
+
+  for (const asset of assets) {
+    if (!asset.warranty_expiry) continue;
+    const expiry = new Date(asset.warranty_expiry);
+    if (expiry >= now && expiry <= dueThreshold) {
+      await createNotificationIfNotExists({
+        title: "Warranty expiring soon",
+        message: `${asset.asset_name} warranty expires on ${expiry.toLocaleDateString()}.`,
+        action: "Warranty Expiring",
+        recordType: "asset",
+        recordId: asset.id,
+      });
+    }
+  }
 }
 
 function getStatusStyle(status: string) {
@@ -902,6 +972,15 @@ const styles: any = {
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 700,
+  },
+  linkButton: {
+    border: "none",
+    background: "transparent",
+    color: "#2563eb",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 700,
+    padding: 0,
   },
   deleteButton: {
     border: "none",

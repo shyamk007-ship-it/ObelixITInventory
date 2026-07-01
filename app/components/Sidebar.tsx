@@ -59,6 +59,35 @@ export default function Sidebar() {
               Dashboard
             </Link>
 
+            <div style={styles.sectionLabel}>🚢 Fleet</div>
+            <Link href="/fleet/dashboard" style={styles.link}>
+              Fleet Dashboard
+            </Link>
+            <Link href="/fleet/dashboard" style={styles.link}>
+              Vessels
+            </Link>
+            <Link href="/admin/assets" style={styles.link}>
+              Fleet Assets
+            </Link>
+            <Link href="/admin/network" style={styles.link}>
+              Network Monitoring
+            </Link>
+            <Link href="/admin/checklists" style={styles.link}>
+              IT Checklist
+            </Link>
+            <Link href="/admin/maintenance" style={styles.link}>
+              Maintenance
+            </Link>
+            <Link href="/admin/tickets" style={styles.link}>
+              Incidents
+            </Link>
+            <Link href="/fleet/documents" style={styles.link}>
+              Documents
+            </Link>
+            <Link href="/fleet/reports" style={styles.link}>
+              Reports
+            </Link>
+
             <Link href="/admin/vessels" style={styles.link}>
               🚢 Vessels
             </Link>
@@ -176,5 +205,14 @@ const styles: any = {
     padding: 12,
     borderRadius: 8,
     background: "#1e293b",
+  },
+  sectionLabel: {
+    color: "#38bdf8",
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    marginTop: 4,
+    marginBottom: 6,
   },
 };
