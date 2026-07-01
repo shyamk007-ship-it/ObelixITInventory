@@ -59,6 +59,10 @@ export default function Sidebar() {
               Dashboard
             </Link>
 
+            <Link href="/admin/vessels" style={styles.link}>
+              🚢 Vessels
+            </Link>
+
             {canManageAssets(role) && (
               <Link href="/admin/assets" style={styles.link}>
                 Assets
