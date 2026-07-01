@@ -93,6 +93,10 @@ export default function Sidebar() {
               Maintenance
             </Link>
 
+            <Link href="/admin/network" style={styles.link}>
+              🌐 Network Monitoring
+            </Link>
+
             <Link href="/admin/reports" style={styles.link}>
               Reports
             </Link>
