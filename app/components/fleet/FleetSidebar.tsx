@@ -1,13 +1,22 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/fleet/dashboard", label: "Fleet Dashboard" },
   { href: "/fleet/vessels", label: "Vessels" },
+  { href: "/fleet/assets", label: "Fleet Assets" },
+  { href: "/fleet/network", label: "Network Monitoring" },
+  { href: "/fleet/checklist", label: "IT Checklist" },
+  { href: "/fleet/maintenance", label: "Maintenance" },
+  { href: "/fleet/incidents", label: "Incidents" },
+  { href: "/fleet/crew", label: "Crew IT" },
   { href: "/fleet/documents", label: "Documents" },
   { href: "/fleet/reports", label: "Reports" },
+  { href: "/fleet/settings", label: "Settings" },
+  { href: "/", label: "← Back to Company Portal" },
 ];
 
 export default function FleetSidebar() {
@@ -23,7 +32,7 @@ export default function FleetSidebar() {
       <nav style={styles.nav}>
         {links.map((link) => (
           <Link
-            key={link.href}
+            key={`${link.href}-${link.label}`}
             href={link.href}
             style={{
               ...styles.link,
@@ -38,7 +47,7 @@ export default function FleetSidebar() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   sidebar: {
     width: 240,
     height: "100vh",

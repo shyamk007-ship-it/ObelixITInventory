@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import TopBar from "../components/TopBar";
-import OfficeSidebar from "../components/OfficeSidebar";
+import OfficeSidebar from "../components/office/OfficeSidebar";
+import OfficeHeader from "../components/office/OfficeHeader";
 import { getUserProfile } from "../lib/rbac";
 
 export default function OfficeLayout({ children }: { children: React.ReactNode }) {
@@ -37,14 +38,17 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     <>
       <OfficeSidebar />
       <main style={styles.main}>
-        <TopBar />
+        <OfficeHeader
+          title="Office Dashboard"
+          subtitle="Manage office assets, employees, support tickets, and administration."
+        />
         {children}
       </main>
     </>
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   main: {
     marginLeft: 260,
     padding: 30,

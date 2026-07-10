@@ -1,212 +1,134 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import FleetStats from "../../components/fleet/FleetStats";
+import FleetWidgets from "../../components/fleet/FleetWidgets";
+import FleetQuickActions from "../../components/fleet/FleetQuickActions";
 
 interface VesselSummary {
   id: number;
   vessel_name?: string | null;
-  imo_number?: string | null;
-  status?: string | null;
-  internet_provider?: string | null;
-  last_backup?: string | null;
-  vessel_type?: string | null;
-  assets_count?: number;
-  active_assets?: number;
   network_health?: number;
-  internet_status?: string | null;
-  maintenance_due?: number;
   open_incidents?: number;
+  maintenance_due?: number;
+}
+
+interface VesselRow {
+  id: number;
+  vessel_name?: string | null;
+}
+
+interface AssetRow {
+  id: number;
+  vessel_id?: number | string | null;
+}
+
+interface MaintenanceRow {
+  id: number;
+  asset_id?: number | string | null;
+  status?: string | null;
+}
+
+interface TicketRow {
+  id: number;
+  vessel_id?: number | string | null;
+  status?: string | null;
+}
+
+interface ChecklistRow {
+  id: number;
+  status?: string | null;
 }
 
 export default function FleetDashboardPage() {
-  const router = useRouter();
   const [vessels, setVessels] = useState<VesselSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [fleetAssets, setFleetAssets] = useState(0);
+  const [checklistCompletion, setChecklistCompletion] = useState("0%");
 
   useEffect(() => {
-    void loadFleetData();
-  }, []);
-
-  const loadFleetData = async () => {
-    setLoading(true);
-    try {
-      const [vesselsResult, assetsResult, maintenanceResult, ticketResult] = await Promise.all([
-        supabase.from("vessels").select("id, vessel_name, imo_number, status, internet_provider, last_backup, vessel_type").order("vessel_name", { ascending: true }),
-        supabase.from("assets").select("id, vessel_id, status"),
-        supabase.from("asset_maintenance").select("id, asset_id, maintenance_date, status"),
+    const loadFleetData = async () => {
+      const [vesselsResult, assetsResult, maintenanceResult, ticketResult, checklistResult] = await Promise.all([
+        supabase.from("vessels").select("id, vessel_name, status").order("vessel_name", { ascending: true }),
+        supabase.from("assets").select("id, vessel_id"),
+        supabase.from("asset_maintenance").select("id, asset_id, status"),
         supabase.from("tickets").select("id, vessel_id, status"),
+        supabase.from("vessel_checklists").select("id, status"),
       ]);
 
-      if (vesselsResult.error) throw vesselsResult.error;
-      if (assetsResult.error) throw assetsResult.error;
-      if (maintenanceResult.error) throw maintenanceResult.error;
-      if (ticketResult.error) throw ticketResult.error;
+      const vesselsData: VesselRow[] = vesselsResult.data || [];
+      const assets: AssetRow[] = assetsResult.data || [];
+      const maintenance: MaintenanceRow[] = maintenanceResult.data || [];
+      const tickets: TicketRow[] = ticketResult.data || [];
+      const checklists: ChecklistRow[] = checklistResult.data || [];
 
-      const assets = assetsResult.data || [];
-      const maintenance = maintenanceResult.data || [];
-      const tickets = ticketResult.data || [];
-
-      const summary = (vesselsResult.data || []).map((vessel: any) => {
-        const vesselAssets = assets.filter((asset: any) => String(asset.vessel_id) === String(vessel.id));
-        const activeAssets = vesselAssets.filter((asset: any) => asset.status === "Assigned" || asset.status === "Available").length;
-        const maintenanceDue = maintenance.filter((item: any) => {
-          const assetInVessel = vesselAssets.some((asset: any) => String(asset.id) === String(item.asset_id));
-          return assetInVessel && item.status === "Pending";
+      const summary = vesselsData.map((vessel) => {
+        const vesselAssets = assets.filter((asset) => String(asset.vessel_id) === String(vessel.id));
+        const maintenanceDue = maintenance.filter((item) => {
+          const assetInVessel = vesselAssets.some((asset) => String(asset.id) === String(item.asset_id));
+          return item.status === "Pending" && assetInVessel;
         }).length;
-        const openIncidents = tickets.filter((ticket: any) => String(ticket.vessel_id) === String(vessel.id) && ticket.status !== "Resolved").length;
-        const networkHealth = Math.max(70, 92 - maintenanceDue * 4 - openIncidents * 2);
+
+        const openIncidents = tickets.filter(
+          (ticket) => String(ticket.vessel_id) === String(vessel.id) && ticket.status !== "Resolved"
+        ).length;
 
         return {
           id: vessel.id,
           vessel_name: vessel.vessel_name,
-          imo_number: vessel.imo_number,
-          status: vessel.status,
-          internet_provider: vessel.internet_provider,
-          last_backup: vessel.last_backup || "No backup recorded",
-          vessel_type: vessel.vessel_type,
-          assets_count: vesselAssets.length,
-          active_assets: activeAssets,
-          network_health: networkHealth,
-          internet_status: networkHealth >= 85 ? "Connected" : networkHealth >= 70 ? "Degraded" : "Offline",
           maintenance_due: maintenanceDue,
           open_incidents: openIncidents,
+          network_health: Math.max(65, 95 - maintenanceDue * 5 - openIncidents * 4),
         } as VesselSummary;
       });
 
-      setVessels(summary);
-    } catch (error) {
-      console.error(error);
-      setVessels([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const completed = checklists.filter((item) => item.status === "Completed").length;
+      const checklistRate = checklists.length ? Math.round((completed / checklists.length) * 100) : 0;
 
-  const totalAssets = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.assets_count || 0), 0), [vessels]);
+      setVessels(summary);
+      setFleetAssets(assets.length);
+      setChecklistCompletion(`${checklistRate}%`);
+    };
+
+    void loadFleetData();
+  }, []);
+
+  const totalVessels = vessels.length;
   const onlineVessels = useMemo(() => vessels.filter((vessel) => (vessel.network_health || 0) >= 85).length, [vessels]);
   const offlineVessels = useMemo(() => vessels.filter((vessel) => (vessel.network_health || 0) < 70).length, [vessels]);
   const openIncidents = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.open_incidents || 0), 0), [vessels]);
   const maintenanceDue = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.maintenance_due || 0), 0), [vessels]);
-  const fleetAlerts = useMemo(() => vessels.filter((vessel) => (vessel.open_incidents || 0) > 0 || (vessel.network_health || 0) < 75).length, [vessels]);
   const avgHealth = useMemo(() => {
     if (!vessels.length) return 0;
     return Math.round(vessels.reduce((sum, vessel) => sum + (vessel.network_health || 0), 0) / vessels.length);
   }, [vessels]);
+  const internetStatus = avgHealth >= 85 ? "Connected" : avgHealth >= 70 ? "Degraded" : "Offline";
+
+  const widgets = {
+    fleetStatus: `${onlineVessels} online / ${offlineVessels} offline`,
+    recentVesselActivity: vessels.slice(0, 3).map((vessel) => vessel.vessel_name || "Unnamed").join(", ") || "No vessel activity",
+    upcomingMaintenance: `${maintenanceDue} pending maintenance tasks`,
+    latestIncidents: `${openIncidents} active incidents`,
+    fleetNetworkHealth: `${avgHealth}% average health`,
+    checklistProgress: checklistCompletion,
+    fleetDocuments: "Document repository available in Fleet Documents",
+  };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.headerRow}>
-        <div>
-          <p style={styles.eyebrow}>Fleet Operations</p>
-          <h1 style={styles.title}>Fleet Dashboard</h1>
-          <p style={styles.subtitle}>Monitor vessel readiness, asset posture, connectivity, and incident load from a single overview.</p>
-        </div>
-      </div>
-
-      <div style={styles.summaryGrid}>
-        <SummaryCard label="Total Vessels" value={vessels.length} />
-        <SummaryCard label="Online Vessels" value={onlineVessels} />
-        <SummaryCard label="Offline Vessels" value={offlineVessels} />
-        <SummaryCard label="Fleet Assets" value={totalAssets} />
-        <SummaryCard label="Open Incidents" value={openIncidents} />
-        <SummaryCard label="Maintenance Due" value={maintenanceDue} />
-        <SummaryCard label="Network Status" value={`${avgHealth}%`} />
-        <SummaryCard label="Fleet Alerts" value={fleetAlerts} />
-      </div>
-
-      <section style={styles.activitySection}>
-        <h2 style={styles.sectionTitle}>Recent Vessel Activity</h2>
-        <div style={styles.activityGrid}>
-          {vessels.slice(0, 6).map((vessel) => (
-            <button key={`activity-${vessel.id}`} style={styles.activityCard} onClick={() => router.push(`/fleet/vessels/${vessel.id}`)}>
-              <strong style={styles.activityName}>{vessel.vessel_name || "Unnamed Vessel"}</strong>
-              <p style={styles.activityMeta}>Network {(vessel.network_health || 0).toString()}%</p>
-              <p style={styles.activityMeta}>Incidents {(vessel.open_incidents || 0).toString()}</p>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {loading ? (
-        <div style={styles.loading}>Loading fleet overview…</div>
-      ) : (
-        <div style={styles.grid}>
-          {vessels.map((vessel) => (
-            <button key={vessel.id} style={styles.card} onClick={() => router.push(`/fleet/vessels/${vessel.id}`)}>
-              <div style={styles.cardHeader}>
-                <div>
-                  <h3 style={styles.cardTitle}>{vessel.vessel_name || "Unnamed Vessel"}</h3>
-                  <p style={styles.cardSubtitle}>{vessel.imo_number || "—"}</p>
-                </div>
-                <span style={{ ...styles.statusBadge, ...getHealthStyle(vessel.network_health || 0) }}>{vessel.internet_status || "Unknown"}</span>
-              </div>
-
-              <div style={styles.metricGrid}>
-                <Metric label="Total Assets" value={vessel.assets_count || 0} />
-                <Metric label="Active Assets" value={vessel.active_assets || 0} />
-                <Metric label="Network Health" value={`${vessel.network_health || 0}%`} />
-                <Metric label="Maintenance Due" value={vessel.maintenance_due || 0} />
-                <Metric label="Open Incidents" value={vessel.open_incidents || 0} />
-                <Metric label="Last Backup" value={vessel.last_backup || "—"} />
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+    <div>
+      <FleetStats
+        totalVessels={totalVessels}
+        onlineVessels={onlineVessels}
+        offlineVessels={offlineVessels}
+        fleetAssets={fleetAssets}
+        openIncidents={openIncidents}
+        maintenanceDue={maintenanceDue}
+        internetStatus={internetStatus}
+        networkHealth={`${avgHealth}%`}
+        checklistCompletion={checklistCompletion}
+      />
+      <FleetWidgets {...widgets} />
+      <FleetQuickActions />
     </div>
   );
 }
-
-function SummaryCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={styles.summaryCard}>
-      <p style={styles.summaryLabel}>{label}</p>
-      <strong style={styles.summaryValue}>{value}</strong>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={styles.metricBox}>
-      <p style={styles.metricLabel}>{label}</p>
-      <strong style={styles.metricValue}>{value}</strong>
-    </div>
-  );
-}
-
-function getHealthStyle(health: number) {
-  if (health >= 90) return { background: "#dcfce7", color: "#166534" };
-  if (health >= 75) return { background: "#fef3c7", color: "#b45309" };
-  return { background: "#fee2e2", color: "#b91c1c" };
-}
-
-const styles: any = {
-  page: { padding: 30, minHeight: "100vh", background: "#f8fbff", color: "#0f172a" },
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap" },
-  eyebrow: { margin: 0, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.2em", fontSize: 12, fontWeight: 700 },
-  title: { margin: "4px 0 6px", fontSize: 28, fontWeight: 800 },
-  subtitle: { margin: 0, color: "#64748b", maxWidth: 760 },
-  summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 },
-  activitySection: { marginBottom: 20 },
-  sectionTitle: { margin: "0 0 12px", color: "#0f172a", fontSize: 20, fontWeight: 800 },
-  activityGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
-  activityCard: { background: "white", borderRadius: 16, border: "1px solid #e2e8f0", padding: 14, textAlign: "left", cursor: "pointer" },
-  activityName: { display: "block", color: "#0f172a", fontSize: 15 },
-  activityMeta: { margin: "6px 0 0", color: "#64748b", fontSize: 13 },
-  summaryLabel: { margin: 0, color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" },
-  summaryValue: { marginTop: 6, display: "block", fontSize: 24, color: "#0f172a" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 },
-  card: { background: "white", borderRadius: 24, padding: 18, border: "1px solid #e2e8f0", boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)", textAlign: "left", cursor: "pointer" },
-  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
-  cardTitle: { margin: 0, color: "#0f172a", fontSize: 18 },
-  cardSubtitle: { margin: "4px 0 0", color: "#64748b", fontSize: 13 },
-  metricGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
-  metricBox: { background: "#f8fbff", borderRadius: 14, padding: 10, border: "1px solid #e2e8f0" },
-  metricLabel: { margin: 0, color: "#64748b", fontSize: 12, fontWeight: 600 },
-  metricValue: { marginTop: 4, display: "block", color: "#0f172a", fontSize: 16 },
-  statusBadge: { padding: "6px 10px", borderRadius: 999, fontSize: 12, fontWeight: 700, display: "inline-block" },
-  loading: { padding: 30, color: "#2563eb", background: "white", borderRadius: 20, border: "1px solid #e2e8f0", textAlign: "center" },
-};

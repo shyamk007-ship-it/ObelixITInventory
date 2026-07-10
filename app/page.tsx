@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "./lib/supabase";
-import PortalHeader from "./components/PortalHeader";
+import PortalHeader from "./components/shared/PortalHeader";
 import WorkspaceCard from "./components/WorkspaceCard";
 
 export default function Home() {
@@ -64,7 +65,7 @@ export default function Home() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: "56px 28px",

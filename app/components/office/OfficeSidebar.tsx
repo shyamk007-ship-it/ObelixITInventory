@@ -1,19 +1,22 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/office/dashboard", label: "Dashboard" },
-  { href: "/admin/assets", label: "Assets" },
-  { href: "/admin/employees", label: "Employees" },
-  { href: "/admin/assignments", label: "Assignments" },
-  { href: "/admin/tickets", label: "Tickets" },
-  { href: "/admin/maintenance", label: "Maintenance" },
-  { href: "/admin/network", label: "Network Monitoring" },
-  { href: "/admin/reports", label: "Reports" },
-  { href: "/admin/activity", label: "Activity" },
-  { href: "/admin/users", label: "Users" },
+  { href: "/office/assets", label: "Assets" },
+  { href: "/office/employees", label: "Employees" },
+  { href: "/office/assignments", label: "Assignments" },
+  { href: "/office/tickets", label: "Tickets" },
+  { href: "/office/maintenance", label: "Maintenance" },
+  { href: "/office/network", label: "Network Monitoring" },
+  { href: "/office/reports", label: "Reports" },
+  { href: "/office/activity", label: "Activity Logs" },
+  { href: "/office/users", label: "Users" },
+  { href: "/office/settings", label: "Settings" },
+  { href: "/", label: "← Back to Company Portal" },
 ];
 
 export default function OfficeSidebar() {
@@ -29,7 +32,7 @@ export default function OfficeSidebar() {
       <nav style={styles.nav}>
         {links.map((link) => (
           <Link
-            key={link.href}
+            key={`${link.href}-${link.label}`}
             href={link.href}
             style={{
               ...styles.link,
@@ -44,7 +47,7 @@ export default function OfficeSidebar() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   sidebar: {
     width: 240,
     height: "100vh",
