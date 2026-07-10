@@ -157,7 +157,7 @@ export default function VesselLayout({
         </div>
       </aside>
 
-      <main className="fleet-main-scroll" style={styles.content}>{children}</main>
+      <main style={styles.content}>{children}</main>
       <style jsx global>{`
         .fleet-sidebar-scroll,
         .fleet-main-scroll {
@@ -266,9 +266,8 @@ const styles: any = {
   shell: {
     display: "flex",
     minHeight: "100vh",
-    height: "100vh",
     background: "#0b1220",
-    overflow: "hidden",
+    width: "100%",
   },
   sidebarWrapper: {
     width: 280,
@@ -363,15 +362,10 @@ const styles: any = {
     flexShrink: 0,
   },
   content: {
-    flex: 1,
     marginLeft: 280,
-    height: "100vh",
-    overflowY: "auto" as const,
-    overflowX: "hidden",
+    minHeight: "100vh",
     background: "#f8fbff",
-    scrollBehavior: "smooth",
-    scrollbarWidth: "thin" as const,
-    scrollbarColor: "rgba(100, 116, 139, 0.55) transparent",
+    width: "calc(100% - 280px)",
   },
 };
 
