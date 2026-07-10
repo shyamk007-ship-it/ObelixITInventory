@@ -17,7 +17,7 @@ export async function requireAdminAccessFromRequest(request: Request) {
   if (!token) {
     return {
       ok: false as const,
-      response: NextResponse.json({ error: "Authorization token is required." }, { status: 401 }),
+      response: NextResponse.json({ success: false, error: "Authorization token is required." }, { status: 401 }),
     };
   }
 
@@ -29,7 +29,7 @@ export async function requireAdminAccessFromRequest(request: Request) {
   if (error || !user?.email) {
     return {
       ok: false as const,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 }),
     };
   }
 
@@ -76,6 +76,6 @@ export async function requireAdminAccessFromRequest(request: Request) {
 
   return {
     ok: false as const,
-    response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    response: NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 }),
   };
 }

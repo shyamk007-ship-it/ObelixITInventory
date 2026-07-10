@@ -80,16 +80,29 @@ export default function UsersPage() {
     });
   }, []);
 
+  const readJsonSafely = useCallback(async <T,>(response: Response): Promise<T> => {
+    const text = await response.text();
+    if (!text) {
+      return {} as T;
+    }
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return {} as T;
+    }
+  }, []);
+
   const loadUsers = useCallback(async () => {
     const response = await fetchWithSession("/api/admin/users", { method: "GET" });
-    const json = (await response.json()) as { data?: UserManagementRecord[]; error?: string };
+    const json = await readJsonSafely<{ success?: boolean; data?: UserManagementRecord[]; error?: string }>(response);
 
     if (!response.ok) {
       throw new Error(json.error || "Unable to load users.");
     }
 
     setUsers(json.data || []);
-  }, [fetchWithSession]);
+  }, [fetchWithSession, readJsonSafely]);
 
   const verifyAccess = useCallback(async () => {
     setLoading(true);
@@ -166,7 +179,7 @@ export default function UsersPage() {
         }),
       });
 
-      const json = (await response.json()) as { success?: boolean; error?: string };
+      const json = await readJsonSafely<{ success?: boolean; error?: string }>(response);
       if (!response.ok) {
         throw new Error(json.error || "Failed to create user.");
       }
@@ -215,7 +228,7 @@ export default function UsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await response.json()) as { success?: boolean; error?: string };
+      const json = await readJsonSafely<{ success?: boolean; error?: string }>(response);
 
       if (!response.ok) {
         throw new Error(json.error || "Failed to update user.");
@@ -258,7 +271,7 @@ export default function UsersPage() {
 
     try {
       const response = await fetchWithSession(`/api/admin/users/${user.auth_user_id}`, { method: "DELETE" });
-      const json = (await response.json()) as { success?: boolean; error?: string };
+      const json = await readJsonSafely<{ success?: boolean; error?: string }>(response);
       if (!response.ok) {
         throw new Error(json.error || "Failed to delete user.");
       }
@@ -301,7 +314,7 @@ export default function UsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patched),
       });
-      const json = (await response.json()) as { success?: boolean; error?: string };
+      const json = await readJsonSafely<{ success?: boolean; error?: string }>(response);
       if (!response.ok) {
         throw new Error(json.error || "Failed to update active status.");
       }
@@ -323,7 +336,7 @@ export default function UsersPage() {
       const response = await fetchWithSession(`/api/admin/users/${user.auth_user_id}/reset-password`, {
         method: "POST",
       });
-      const json = (await response.json()) as { success?: boolean; error?: string; recovery_link?: string | null };
+      const json = await readJsonSafely<{ success?: boolean; error?: string; recovery_link?: string | null }>(response);
       if (!response.ok) {
         throw new Error(json.error || "Failed to reset password.");
       }
@@ -355,7 +368,7 @@ export default function UsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ force_password_change: forcePasswordChange }),
       });
-      const json = (await response.json()) as { success?: boolean; error?: string };
+      const json = await readJsonSafely<{ success?: boolean; error?: string }>(response);
       if (!response.ok) {
         throw new Error(json.error || "Failed to update force password change setting.");
       }
