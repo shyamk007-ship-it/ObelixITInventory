@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
@@ -8,8 +8,14 @@ import { buildAuditDescription, createAuditLog } from "../lib/audit";
 import { useEnterpriseAccess } from "./shared/EnterpriseAccessProvider";
 import { getWorkspaceLabel, roleLabel } from "../lib/rbac";
 
+interface MenuAction {
+  label: string;
+  handler: () => Promise<void> | void;
+}
+
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const { loading, profile, activeAssignment, assignments, switchAssignment } = useEnterpriseAccess();
 
@@ -19,7 +25,34 @@ export default function ProfileMenu() {
     }
   }, [loading, profile, router]);
 
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (!wrapperRef.current) {
+        return;
+      }
+
+      if (event.target instanceof Node && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener("mousedown", onClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+    };
+  }, [open]);
+
+  const closeAndNavigate = async (path: string) => {
+    setOpen(false);
+    router.push(path);
+  };
+
   const handleLogout = async () => {
+    setOpen(false);
+
     await createAuditLog({
       action: "Logout",
       description: buildAuditDescription({
@@ -42,14 +75,16 @@ export default function ProfileMenu() {
   const currentRole = activeAssignment ? roleLabel[activeAssignment.role] : "Unknown";
   const currentWorkspace = activeAssignment ? getWorkspaceLabel(activeAssignment.workspace) : "Company Portal";
 
+  const menuActions: MenuAction[] = [
+    { label: "My Profile", handler: () => closeAndNavigate("/profile?section=profile") },
+    { label: "Account Settings", handler: () => closeAndNavigate("/profile?section=settings") },
+    { label: "Notifications", handler: () => closeAndNavigate("/profile?section=notifications") },
+    { label: "Security", handler: () => closeAndNavigate("/profile?section=security") },
+  ];
+
   return (
-    <div style={styles.wrapper}>
-      <button
-        type="button"
-        style={styles.profileButton}
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
+    <div ref={wrapperRef} style={styles.wrapper}>
+      <button type="button" style={styles.profileButton} onClick={() => setOpen((prev) => !prev)} aria-expanded={open}>
         <div style={styles.avatar}>{(profile?.full_name || "U").charAt(0).toUpperCase()}</div>
 
         <div style={styles.userInfo}>
@@ -66,7 +101,13 @@ export default function ProfileMenu() {
             <span style={styles.workspaceBadge}>{currentWorkspace}</span>
           </div>
 
-          {assignments.length > 1 && <div style={styles.switchLabel}>Switch Workspace</div>}
+          {menuActions.map((item) => (
+            <button key={item.label} type="button" style={styles.dropdownItem} onClick={() => void item.handler()}>
+              {item.label}
+            </button>
+          ))}
+
+          <div style={styles.switchLabel}>Switch Workspace</div>
 
           {assignments.map((assignment) => (
             <button
@@ -76,17 +117,14 @@ export default function ProfileMenu() {
                 ...styles.dropdownItem,
                 ...(activeAssignment?.id === assignment.id ? styles.dropdownItemActive : {}),
               }}
-              onClick={() => handleSwitch(assignment.id)}
+              onClick={() => void handleSwitch(assignment.id)}
             >
-              {roleLabel[assignment.role]}{assignment.vessel_id ? ` - Vessel ${assignment.vessel_id}` : ""}
+              {roleLabel[assignment.role]}
+              {assignment.vessel_id ? ` - Vessel ${assignment.vessel_id}` : ""}
             </button>
           ))}
 
-          <button
-            type="button"
-            style={{ ...styles.dropdownItem, color: "#ef4444" }}
-            onClick={handleLogout}
-          >
+          <button type="button" style={{ ...styles.dropdownItem, color: "#ef4444" }} onClick={() => void handleLogout()}>
             Logout
           </button>
         </div>
@@ -151,12 +189,12 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
     overflow: "hidden",
-    minWidth: 260,
+    minWidth: 280,
     zIndex: 999,
     border: "1px solid #e2e8f0",
   },
   profileHeader: {
-    padding: "16px 16px 8px",
+    padding: "16px 16px 10px",
     borderBottom: "1px solid #e2e8f0",
   },
   profileName: {

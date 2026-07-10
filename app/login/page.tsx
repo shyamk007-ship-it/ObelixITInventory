@@ -42,7 +42,18 @@ export default function LoginPage() {
       }),
     });
 
+    const {
+      data: { user: authenticatedUser },
+    } = await supabase.auth.getUser();
+
+    const mustForcePasswordChange = Boolean(authenticatedUser?.user_metadata?.force_password_change);
+
     setLoading(false);
+
+    if (mustForcePasswordChange) {
+      window.location.href = "/profile?section=security&forced=1";
+      return;
+    }
 
     const landingRoute = profile ? await getPostLoginRoute(profile) : "/";
     window.location.href = landingRoute;
