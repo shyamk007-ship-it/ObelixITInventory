@@ -1,154 +1,241 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import FleetStatCard from "../../../components/fleet/FleetStatCard";
-import VesselHeader from "../../../components/fleet/VesselHeader";
-import RecentIncidents from "../../../components/fleet/RecentIncidents";
-import UpcomingMaintenance from "../../../components/fleet/UpcomingMaintenance";
-import ChecklistProgress from "../../../components/fleet/ChecklistProgress";
-import WarrantyPanel from "../../../components/fleet/WarrantyPanel";
-import InternetStatus from "../../../components/fleet/InternetStatus";
-import LatestDocuments from "../../../components/fleet/LatestDocuments";
-import { getFleetOverviewData } from "../../../lib/fleet/overview";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
 
-export default function VesselOverviewPage() {
+interface VesselDetail {
+  id: number;
+  vessel_name?: string | null;
+  imo_number?: string | null;
+  vessel_type?: string | null;
+  status?: string | null;
+  internet_provider?: string | null;
+  satellite_provider?: string | null;
+  operating_region?: string | null;
+  captain?: string | null;
+  last_backup?: string | null;
+}
+
+const tabs = ["Overview", "Assets", "Network", "IT Checklist", "Maintenance", "Incidents", "Documents", "Reports"] as const;
+type TabKey = (typeof tabs)[number];
+
+export default function FleetVesselDetailPage() {
   const params = useParams();
-  const vesselId = params?.id as string;
-
+  const router = useRouter();
+  const vesselId = Number(params?.id);
+  const [activeTab, setActiveTab] = useState<TabKey>("Overview");
+  const [vessel, setVessel] = useState<VesselDetail | null>(null);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [networkDevices, setNetworkDevices] = useState<any[]>([]);
+  const [checklists, setChecklists] = useState<any[]>([]);
+  const [maintenance, setMaintenance] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [data, setData] = useState<Awaited<ReturnType<typeof getFleetOverviewData>> | null>(null);
 
   useEffect(() => {
-    if (!vesselId) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
-
-    void loadOverview();
+    if (!vesselId) return;
+    void loadVesselData();
   }, [vesselId]);
 
-  const loadOverview = async () => {
+  const loadVesselData = async () => {
     setLoading(true);
-    setNotFound(false);
     try {
-      const overview = await getFleetOverviewData(vesselId);
-      setData(overview);
-      if (!overview.vessel) {
-        setNotFound(true);
-      }
+      const [vesselResult, assetsResult, networkResult, checklistResult, maintenanceResult, incidentResult] = await Promise.all([
+        supabase.from("vessels").select("*").eq("id", vesselId).single(),
+        supabase.from("assets").select("*").eq("vessel_id", vesselId),
+        supabase.from("network_devices").select("*").eq("vessel_id", vesselId),
+        supabase.from("vessel_it_checklists").select("*").eq("vessel_id", vesselId),
+        supabase.from("asset_maintenance").select("*, assets(asset_name)").eq("asset_id", vesselId),
+        supabase.from("tickets").select("*").eq("vessel_id", vesselId),
+      ]);
+
+      if (!vesselResult.error) setVessel(vesselResult.data as VesselDetail);
+      if (!assetsResult.error) setAssets(assetsResult.data || []);
+      if (!networkResult.error) setNetworkDevices(networkResult.data || []);
+      if (!checklistResult.error) setChecklists(checklistResult.data || []);
+      if (!maintenanceResult.error) setMaintenance(maintenanceResult.data || []);
+      if (!incidentResult.error) setIncidents(incidentResult.data || []);
     } catch (error) {
       console.error(error);
-      setNotFound(true);
     } finally {
       setLoading(false);
     }
   };
 
+  const summary = useMemo(() => ({
+    assets: assets.length,
+    onlineDevices: networkDevices.filter((device) => device.status === "Online").length,
+    openIncidents: incidents.filter((incident) => incident.status !== "Resolved").length,
+    maintenanceDue: maintenance.filter((item) => item.status === "Pending").length,
+  }), [assets, networkDevices, incidents, maintenance]);
+
   if (loading) {
-    return (
-      <div style={styles.page}>
-        <VesselHeader loading />
-        <div style={styles.statsGrid}>
-          {Array.from({ length: 8 }).map((_, index) => (
-            <FleetStatCard key={index} label="" value="" loading />
-          ))}
-        </div>
-        <div style={styles.panelsGrid}>
-          <RecentIncidents incidents={[]} loading />
-          <UpcomingMaintenance maintenance={[]} loading />
-          <ChecklistProgress checklists={[]} loading />
-          <WarrantyPanel items={[]} loading />
-        </div>
-      </div>
-    );
+    return <div style={styles.loading}>Loading vessel profile…</div>;
   }
 
-  if (notFound || !data?.vessel) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.notFoundCard}>
-          <p style={styles.eyebrow}>Fleet Workspace</p>
-          <h1 style={styles.title}>Vessel Not Found</h1>
-          <p style={styles.subtitle}>The selected vessel could not be found. Please return to the fleet dashboard and try again.</p>
-        </div>
-      </div>
-    );
+  if (!vessel) {
+    return <div style={styles.loading}>Vessel not found.</div>;
   }
 
   return (
     <div style={styles.page}>
-      <VesselHeader vesselName={data.vessel.vessel_name} subtitle={`Operational snapshot for ${data.vessel.vessel_name || "this vessel"}.`} />
-
-      <div style={styles.statsGrid}>
-        <FleetStatCard label="Total Assets" value={data.stats.totalAssets} description="Assigned and available assets" />
-        <FleetStatCard label="Network Devices" value={data.stats.networkDevices} description="Online and offline endpoints" />
-        <FleetStatCard label="Servers" value={data.stats.servers} description="Server infrastructure" />
-        <FleetStatCard label="Open Tickets" value={data.stats.openTickets} description="Active incidents" />
-        <FleetStatCard label="Maintenance Due" value={data.stats.maintenanceDue} description="Pending maintenance" />
-        <FleetStatCard label="Checklist Completion" value={`${data.stats.checklistCompletion}%`} description="Operational readiness" />
-        <InternetStatus status={data.stats.internetStatus} />
-        <FleetStatCard label="Warranty Expiry" value={data.stats.warrantyExpiry} description="Assets with active warranties" />
+      <div style={styles.headerRow}>
+        <div>
+          <p style={styles.eyebrow}>Fleet Operations</p>
+          <h1 style={styles.title}>{vessel.vessel_name || "Vessel"}</h1>
+          <p style={styles.subtitle}>Operational snapshot and lifecycle view for this vessel.</p>
+        </div>
+        <button style={styles.secondaryButton} onClick={() => router.push("/fleet/dashboard")}>← Back to Fleet</button>
       </div>
 
-      <div style={styles.panelsGrid}>
-        <RecentIncidents incidents={data.incidents} />
-        <UpcomingMaintenance maintenance={data.maintenance} />
-        <ChecklistProgress checklists={data.checklists} />
-        <WarrantyPanel items={data.warrantyItems} />
-        <LatestDocuments documents={data.documents} />
+      <div style={styles.summaryGrid}>
+        <SummaryCard label="Assets" value={summary.assets} />
+        <SummaryCard label="Online Devices" value={summary.onlineDevices} />
+        <SummaryCard label="Open Incidents" value={summary.openIncidents} />
+        <SummaryCard label="Maintenance Due" value={summary.maintenanceDue} />
+      </div>
+
+      <div style={styles.tabRow}>
+        {tabs.map((tab) => (
+          <button key={tab} style={{ ...styles.tabButton, ...(activeTab === tab ? styles.tabButtonActive : {}) }} onClick={() => setActiveTab(tab)}>
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div style={styles.card}>
+        {activeTab === "Overview" && (
+          <div style={styles.contentGrid}>
+            <div>
+              <p style={styles.metaLabel}>IMO</p>
+              <h3 style={styles.metaValue}>{vessel.imo_number || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Type</p>
+              <h3 style={styles.metaValue}>{vessel.vessel_type || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Status</p>
+              <h3 style={styles.metaValue}>{vessel.status || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Internet Provider</p>
+              <h3 style={styles.metaValue}>{vessel.internet_provider || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Satellite Provider</p>
+              <h3 style={styles.metaValue}>{vessel.satellite_provider || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Region</p>
+              <h3 style={styles.metaValue}>{vessel.operating_region || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Captain</p>
+              <h3 style={styles.metaValue}>{vessel.captain || "—"}</h3>
+            </div>
+            <div>
+              <p style={styles.metaLabel}>Last Backup</p>
+              <h3 style={styles.metaValue}>{vessel.last_backup || "—"}</h3>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "Assets" && (
+          <div style={styles.listGrid}>
+            {assets.map((asset) => (
+              <div key={asset.id} style={styles.listCard}>
+                <strong>{asset.asset_name || "Unnamed Asset"}</strong>
+                <p style={styles.listText}>{asset.asset_tag || "—"}</p>
+                <p style={styles.listText}>{asset.status || "Unknown"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "Network" && (
+          <div style={styles.listGrid}>
+            {networkDevices.map((device) => (
+              <div key={device.id} style={styles.listCard}>
+                <strong>{device.device_name || "Unnamed Device"}</strong>
+                <p style={styles.listText}>{device.ip_address || "—"}</p>
+                <p style={styles.listText}>{device.status || "Unknown"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "IT Checklist" && (
+          <div style={styles.listGrid}>
+            {checklists.map((item) => (
+              <div key={item.id} style={styles.listCard}>
+                <strong>{item.checklist_type || "Checklist"}</strong>
+                <p style={styles.listText}>{item.status || "Pending"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "Maintenance" && (
+          <div style={styles.listGrid}>
+            {maintenance.map((item) => (
+              <div key={item.id} style={styles.listCard}>
+                <strong>{item.assets?.asset_name || "Maintenance Item"}</strong>
+                <p style={styles.listText}>{item.status || "Pending"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "Incidents" && (
+          <div style={styles.listGrid}>
+            {incidents.map((incident) => (
+              <div key={incident.id} style={styles.listCard}>
+                <strong>{incident.title || "Incident"}</strong>
+                <p style={styles.listText}>{incident.status || "Open"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "Documents" && <div style={styles.emptyState}>Documents will be surfaced here from the fleet document repository.</div>}
+        {activeTab === "Reports" && <div style={styles.emptyState}>Operational reports will be generated here for the selected vessel.</div>}
       </div>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    padding: 30,
-    minHeight: "100vh",
-    background: "#f8fbff",
-    color: "#0f172a",
-  },
-  eyebrow: {
-    margin: 0,
-    color: "#2563eb",
-    textTransform: "uppercase",
-    letterSpacing: "0.18em",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  title: {
-    margin: "6px 0 6px",
-    fontSize: 28,
-    fontWeight: 800,
-    color: "#0f172a",
-  },
-  subtitle: {
-    margin: 0,
-    color: "#64748b",
-    maxWidth: 700,
-  },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 14,
-    marginBottom: 24,
-  },
-  panelsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-    gap: 16,
-  },
-  notFoundCard: {
-    background: "white",
-    borderRadius: 24,
-    padding: 40,
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 12px 32px rgba(15, 23, 42, 0.06)",
-    maxWidth: 560,
-    margin: "0 auto",
-    textAlign: "center",
-  },
+function SummaryCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div style={styles.summaryCard}>
+      <p style={styles.summaryLabel}>{label}</p>
+      <strong style={styles.summaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+const styles: any = {
+  page: { padding: 30, minHeight: "100vh", background: "#f8fbff", color: "#0f172a" },
+  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 16 },
+  eyebrow: { margin: 0, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.2em", fontSize: 12, fontWeight: 700 },
+  title: { margin: "4px 0 6px", fontSize: 28, fontWeight: 800 },
+  subtitle: { margin: 0, color: "#64748b", maxWidth: 760 },
+  secondaryButton: { border: "1px solid #cbd5e1", background: "white", color: "#0f172a", padding: "10px 14px", borderRadius: 999, fontWeight: 700, cursor: "pointer" },
+  summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 },
+  summaryCard: { background: "white", borderRadius: 20, padding: 16, border: "1px solid #e2e8f0", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)" },
+  summaryLabel: { margin: 0, color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" },
+  summaryValue: { marginTop: 6, display: "block", fontSize: 24, color: "#0f172a" },
+  tabRow: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 },
+  tabButton: { border: "1px solid #cbd5e1", background: "white", color: "#334155", borderRadius: 999, padding: "8px 12px", cursor: "pointer", fontWeight: 700 },
+  tabButtonActive: { background: "#2563eb", color: "white", borderColor: "#2563eb" },
+  card: { background: "white", borderRadius: 24, padding: 20, border: "1px solid #e2e8f0", boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)" },
+  contentGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 },
+  metaLabel: { margin: 0, color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" },
+  metaValue: { margin: "4px 0 0", fontSize: 18, color: "#0f172a" },
+  listGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 },
+  listCard: { border: "1px solid #e2e8f0", borderRadius: 16, padding: 14, background: "#f8fbff" },
+  listText: { margin: "4px 0 0", color: "#64748b", fontSize: 13 },
+  emptyState: { padding: 24, color: "#64748b", background: "#f8fbff", borderRadius: 16, border: "1px dashed #cbd5e1" },
+  loading: { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "70vh", color: "#0f172a" },
 };
