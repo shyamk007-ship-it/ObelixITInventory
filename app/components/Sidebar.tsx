@@ -2,21 +2,47 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  getUserProfile,
-  canManageUsers,
-  canManageAssets,
-  canViewEmployees,
-  canAssignAssets,
-  isEmployee,
-  roleLabel,
-  Role,
-} from "../lib/rbac";
+import { usePathname, useRouter } from "next/navigation";
+import { getUserProfile, isEmployee, roleLabel, Role } from "../lib/rbac";
+
+type WorkspaceGroup = "office" | "fleet";
+
+interface NavItem {
+  href: string;
+  label: string;
+}
+
+const OFFICE_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/admin/assets", label: "Assets" },
+  { href: "/admin/employees", label: "Employees" },
+  { href: "/admin/assignments", label: "Assignments" },
+  { href: "/admin/tickets", label: "Tickets" },
+  { href: "/admin/maintenance", label: "Maintenance" },
+  { href: "/admin/network", label: "Network Monitoring" },
+  { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/activity", label: "Activity Logs" },
+  { href: "/admin/users", label: "Users" },
+];
+
+const FLEET_ITEMS: NavItem[] = [
+  { href: "/fleet/dashboard", label: "Fleet Dashboard" },
+  { href: "/fleet/vessels", label: "Vessels" },
+  { href: "/admin/assets", label: "Fleet Assets" },
+  { href: "/admin/network", label: "Network Monitoring" },
+  { href: "/admin/checklists", label: "IT Checklist" },
+  { href: "/admin/maintenance", label: "Maintenance" },
+  { href: "/admin/tickets", label: "Incidents" },
+  { href: "/fleet/documents", label: "Documents" },
+  { href: "/fleet/reports", label: "Reports" },
+  { href: "/fleet/vessels", label: "Crew IT" },
+];
 
 export default function Sidebar() {
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedGroup, setExpandedGroup] = useState<WorkspaceGroup>("office");
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
@@ -30,10 +56,16 @@ export default function Sidebar() {
 
       setRole(profile.role);
       setLoading(false);
+
+      if (pathname?.startsWith("/fleet")) {
+        setExpandedGroup("fleet");
+      } else {
+        setExpandedGroup("office");
+      }
     };
 
-    loadRole();
-  }, [router]);
+    void loadRole();
+  }, [pathname, router]);
 
   if (loading || !role) {
     return (
@@ -61,99 +93,28 @@ export default function Sidebar() {
       <nav className="sidebar-menu-scroll" style={styles.nav}>
         {showAdminLinks ? (
           <>
-            <Link href="/dashboard" style={styles.link}>
-              Dashboard
-            </Link>
+            <SidebarLink href="/dashboard" label="Dashboard" pathname={pathname} />
 
-            <div style={styles.sectionLabel}>🚢 Fleet</div>
-            <Link href="/fleet/dashboard" style={styles.link}>
-              Fleet Dashboard
-            </Link>
-            <Link href="/fleet/dashboard" style={styles.link}>
-              Vessels
-            </Link>
-            <Link href="/admin/assets" style={styles.link}>
-              Fleet Assets
-            </Link>
-            <Link href="/admin/network" style={styles.link}>
-              Network Monitoring
-            </Link>
-            <Link href="/admin/checklists" style={styles.link}>
-              IT Checklist
-            </Link>
-            <Link href="/admin/maintenance" style={styles.link}>
-              Maintenance
-            </Link>
-            <Link href="/admin/tickets" style={styles.link}>
-              Incidents
-            </Link>
-            <Link href="/fleet/documents" style={styles.link}>
-              Documents
-            </Link>
-            <Link href="/fleet/reports" style={styles.link}>
-              Reports
-            </Link>
+            <WorkspaceSection
+              title="?? OFFICE OPERATIONS"
+              expanded={expandedGroup === "office"}
+              onToggle={() => setExpandedGroup("office")}
+              items={OFFICE_ITEMS}
+              pathname={pathname}
+            />
 
-            <Link href="/admin/vessels" style={styles.link}>
-              🚢 Vessels
-            </Link>
-
-            <Link href="/admin/checklists" style={styles.link}>
-              📝 IT Checklist
-            </Link>
-
-            {canManageAssets(role) && (
-              <Link href="/admin/assets" style={styles.link}>
-                Assets
-              </Link>
-            )}
-
-            {canViewEmployees(role) && (
-              <Link href="/admin/employees" style={styles.link}>
-                Employees
-              </Link>
-            )}
-
-            {canAssignAssets(role) && (
-              <Link href="/admin/assignments" style={styles.link}>
-                Assignments
-              </Link>
-            )}
-
-            <Link href="/admin/tickets" style={styles.link}>
-              Tickets
-            </Link>
-
-            <Link href="/admin/maintenance" style={styles.link}>
-              Maintenance
-            </Link>
-
-            <Link href="/admin/network" style={styles.link}>
-              🌐 Network Monitoring
-            </Link>
-
-            <Link href="/admin/reports" style={styles.link}>
-              Reports
-            </Link>
-
-            <Link href="/admin/activity" style={styles.link}>
-              Activity
-            </Link>
-
-            {canManageUsers(role) && (
-              <Link href="/admin/users" style={styles.link}>
-                Users
-              </Link>
-            )}
+            <WorkspaceSection
+              title="?? FLEET OPERATIONS"
+              expanded={expandedGroup === "fleet"}
+              onToggle={() => setExpandedGroup("fleet")}
+              items={FLEET_ITEMS}
+              pathname={pathname}
+            />
           </>
         ) : (
           <>
-            <Link href="/employee" style={styles.link}>
-              My Assignments
-            </Link>
-            <Link href="/employee" style={styles.link}>
-              My Support
-            </Link>
+            <SidebarLink href="/employee" label="My Assignments" pathname={pathname} />
+            <SidebarLink href="/employee" label="My Support" pathname={pathname} />
           </>
         )}
       </nav>
@@ -185,6 +146,70 @@ export default function Sidebar() {
   );
 }
 
+function WorkspaceSection({
+  title,
+  expanded,
+  onToggle,
+  items,
+  pathname,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  items: NavItem[];
+  pathname: string | null;
+}) {
+  const maxHeight = expanded ? items.length * 46 + 12 : 0;
+
+  return (
+    <div style={styles.sectionWrap}>
+      <button type="button" onClick={onToggle} style={styles.sectionToggle}>
+        <span style={styles.sectionTitle}>{title}</span>
+        <span style={styles.sectionArrow}>{expanded ? "?" : "?"}</span>
+      </button>
+
+      <div
+        style={{
+          ...styles.sectionBody,
+          maxHeight,
+          opacity: expanded ? 1 : 0.65,
+        }}
+      >
+        {items.map((item) => (
+          <SidebarLink key={`${title}-${item.label}`} href={item.href} label={item.label} pathname={pathname} nested />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SidebarLink({
+  href,
+  label,
+  pathname,
+  nested = false,
+}: {
+  href: string;
+  label: string;
+  pathname: string | null;
+  nested?: boolean;
+}) {
+  const active = pathname === href || (href !== "/" && pathname?.startsWith(`${href}/`));
+
+  return (
+    <Link
+      href={href}
+      style={{
+        ...styles.link,
+        ...(nested ? styles.linkNested : {}),
+        ...(active ? styles.linkActive : {}),
+      }}
+    >
+      {label}
+    </Link>
+  );
+}
+
 const styles: any = {
   sidebar: {
     width: 240,
@@ -199,24 +224,15 @@ const styles: any = {
     flexDirection: "column",
     overflow: "hidden",
   },
-
   logo: {
     marginBottom: 16,
     color: "#38bdf8",
     fontSize: 24,
   },
-
   brand: {
     flexShrink: 0,
     marginBottom: 28,
   },
-
-  loadingWrap: {
-    flex: 1,
-    minHeight: 0,
-    overflow: "hidden",
-  },
-
   roleBadge: {
     display: "inline-flex",
     marginTop: 12,
@@ -227,38 +243,74 @@ const styles: any = {
     fontSize: 12,
     fontWeight: 700,
   },
-
+  loadingWrap: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
   loading: {
     color: "#cbd5e1",
     fontSize: 14,
   },
-
   nav: {
     flex: 1,
     minHeight: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 14,
+    gap: 12,
     overflowY: "auto",
     overflowX: "hidden",
     scrollbarWidth: "thin",
     scrollbarColor: "#475569 transparent",
+    paddingRight: 2,
   },
-
   link: {
     color: "white",
     textDecoration: "none",
     padding: 12,
     borderRadius: 8,
     background: "#1e293b",
+    fontSize: 14,
+    display: "block",
   },
-  sectionLabel: {
+  linkNested: {
+    padding: "10px 12px",
+    fontSize: 13,
+    background: "#172435",
+    marginTop: 8,
+  },
+  linkActive: {
+    background: "#2563eb",
+  },
+  sectionWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  sectionToggle: {
+    width: "100%",
+    border: "none",
+    background: "transparent",
     color: "#38bdf8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "2px 2px",
     fontSize: 12,
     fontWeight: 700,
-    letterSpacing: "0.18em",
+    letterSpacing: "0.14em",
     textTransform: "uppercase",
-    marginTop: 4,
-    marginBottom: 6,
+    cursor: "pointer",
+  },
+  sectionTitle: {
+    textAlign: "left",
+  },
+  sectionArrow: {
+    color: "#94a3b8",
+    fontSize: 12,
+  },
+  sectionBody: {
+    overflow: "hidden",
+    transition: "max-height 240ms ease, opacity 220ms ease",
   },
 };
