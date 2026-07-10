@@ -2,14 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getUserProfile, isEmployee, roleLabel, Role } from "../lib/rbac";
-
-const SUPER_ADMIN_EMAIL = "shyam@shipmanager.in";
-
-export function isSuperAdmin(user: { email?: string }) {
-  return user.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
-}
+import { getUserProfile, isEmployee, isOwnerEmail, roleLabel, Role } from "../lib/rbac";
 
 type WorkspaceGroup = "office" | "fleet";
 
@@ -89,7 +84,7 @@ export default function Sidebar() {
     );
   }
 
-  const showAdminLinks = !isEmployee(role) || isSuperAdmin({ email: userEmail });
+  const showAdminLinks = !isEmployee(role) || isOwnerEmail(userEmail);
 
   return (
     <div style={styles.sidebar}>
@@ -218,7 +213,7 @@ function SidebarLink({
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   sidebar: {
     width: 240,
     height: "100vh",

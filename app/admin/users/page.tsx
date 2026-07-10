@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, buildAuditDescription } from "../../lib/audit";
+import { canManageUsers, getUserProfile } from "../../lib/rbac";
+
+interface UserRow {
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
+}
 
 export default function UsersPage() {
+  const router = useRouter();
+  const accessTimerRef = useRef<number | null>(null);
   const [authorized, setAuthorized] =
     useState(false);
 
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
 
   const [fullName, setFullName] =
     useState("");
@@ -19,59 +31,63 @@ export default function UsersPage() {
   const [role, setRole] =
     useState("employee");
 
-  useEffect(() => {
-    checkAccess();
+  // FETCH USERS
+  const fetchUsers = useCallback(async () => {
+    const { data, error } =
+      await supabase
+        .from("users")
+        .select("id, full_name, email, role")
+        .order("created_at", {
+          ascending: false,
+        });
+
+    if (!error) {
+      const typedUsers: UserRow[] = (data || []).map((item) => ({
+        id: Number(item.id),
+        full_name: String(item.full_name || ""),
+        email: String(item.email || ""),
+        role: String(item.role || "employee"),
+      }));
+      setUsers(typedUsers);
+    }
   }, []);
 
   // CHECK ACCESS
-  const checkAccess = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const checkAccess = useCallback(async () => {
+    const profile = await getUserProfile();
 
-    if (!user) {
-      window.location.href = "/login";
+    if (!profile) {
+      router.replace("/login");
       return;
     }
 
-    const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", user.email)
-      .single();
-
-    const roleValue = data?.role?.toLowerCase();
-    if (roleValue !== "admin" && roleValue !== "super_admin") {
+    if (!canManageUsers(profile.role)) {
       alert("Access denied");
 
-      window.location.href =
-        "/dashboard";
+      router.replace("/dashboard");
 
       return;
     }
 
     setAuthorized(true);
 
-    fetchUsers();
-  };
+    await fetchUsers();
+  }, [fetchUsers, router]);
 
-  // FETCH USERS
-  const fetchUsers = async () => {
-    const { data, error } =
-      await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", {
-          ascending: false,
-        });
+  useEffect(() => {
+    accessTimerRef.current = window.setTimeout(() => {
+      void checkAccess();
+    }, 0);
 
-    if (!error) {
-      setUsers(data || []);
-    }
-  };
+    return () => {
+      if (accessTimerRef.current !== null) {
+        window.clearTimeout(accessTimerRef.current);
+      }
+    };
+  }, [checkAccess]);
 
   // CREATE USER
-  const createUser = async () => {
+  const createUser = useCallback(async () => {
     const { data, error } =
       await supabase.from("users").insert([
         {
@@ -103,8 +119,8 @@ export default function UsersPage() {
     setEmail("");
     setRole("employee");
 
-    fetchUsers();
-  };
+    await fetchUsers();
+  }, [email, fetchUsers, fullName, role]);
 
   if (!authorized) {
     return <h1>Checking access...</h1>;
@@ -202,7 +218,7 @@ export default function UsersPage() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   container: {
     padding: 40,
     fontFamily: "Arial",

@@ -35,6 +35,11 @@ export interface UserProfile {
   role: Role;
 }
 
+export const OWNER_SUPER_ADMIN_EMAIL = "shyam@shipmanager.in";
+
+export const isOwnerEmail = (email?: string | null) =>
+  (email || "").trim().toLowerCase() === OWNER_SUPER_ADMIN_EMAIL;
+
 const normalizeRole = (rawRole?: string | null): Role => {
   const role = rawRole?.toLowerCase();
 
@@ -138,17 +143,33 @@ const buildVirtualAssignment = (profile: UserProfile): UserRoleAssignment | null
   };
 };
 
-const getAuthUserId = async (): Promise<string | null> => {
+const getAuthUser = async () => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user?.id ?? null;
+  return user ?? null;
 };
 
 export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
-  const userId = await getAuthUserId();
-  if (!userId) return [];
+  const user = await getAuthUser();
+  if (!user) return [];
+
+  if (isOwnerEmail(user.email)) {
+    return [
+      {
+        id: 1,
+        user_id: user.id,
+        role: "super_admin",
+        workspace: "company",
+        vessel_id: null,
+        department: "System Owner",
+        is_active: true,
+      },
+    ];
+  }
+
+  const userId = user.id;
 
   const { data, error } = await supabase
     .from("user_roles")
@@ -218,7 +239,7 @@ export const getAccessibleVessels = (assignments: UserRoleAssignment[]) =>
 
 export const canAccessWorkspaceAssignments = (assignments: UserRoleAssignment[], workspace: WorkspaceScope) => {
   if (assignments.some((assignment) => assignment.role === "super_admin")) {
-    return workspace === "office" || workspace === "fleet" || workspace === "company";
+    return true;
   }
 
   if (workspace === "office") {
@@ -328,39 +349,49 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
   const userTable = await tryQuery("users");
   if (!userTable.error && userTable.data) {
+    const resolvedEmail = userTable.data.email || user.email;
     return {
       id: userTable.data.id ?? 0,
-      email: userTable.data.email || user.email,
+      email: resolvedEmail,
       full_name: userTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: normalizeRole(userTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: isOwnerEmail(resolvedEmail)
+        ? "super_admin"
+        : normalizeRole(userTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
   const usersProfilesTable = await tryQuery("users_profiles");
   if (!usersProfilesTable.error && usersProfilesTable.data) {
+    const resolvedEmail = usersProfilesTable.data.email || user.email;
     return {
       id: usersProfilesTable.data.id ?? 0,
-      email: usersProfilesTable.data.email || user.email,
+      email: resolvedEmail,
       full_name: usersProfilesTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: normalizeRole(usersProfilesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: isOwnerEmail(resolvedEmail)
+        ? "super_admin"
+        : normalizeRole(usersProfilesTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
   const employeesTable = await tryQuery("employees");
   if (!employeesTable.error && employeesTable.data) {
+    const resolvedEmail = employeesTable.data.email || user.email;
     return {
       id: employeesTable.data.id ?? 0,
-      email: employeesTable.data.email || user.email,
+      email: resolvedEmail,
       full_name: employeesTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: normalizeRole(employeesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: isOwnerEmail(resolvedEmail)
+        ? "super_admin"
+        : normalizeRole(employeesTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
+  const fallbackEmail = user.email;
   return {
     id: 0,
-    email: user.email,
+    email: fallbackEmail,
     full_name: user.user_metadata?.full_name || user.email,
-    role: normalizeRole(user.user_metadata?.role ?? "employee"),
+    role: isOwnerEmail(fallbackEmail) ? "super_admin" : normalizeRole(user.user_metadata?.role ?? "employee"),
   };
 }
 

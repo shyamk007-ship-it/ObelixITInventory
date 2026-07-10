@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { getUserProfile, Role } from "../../lib/rbac";
+import { canAccessAdmin, getUserProfile, Role } from "../../lib/rbac";
 import Sidebar from "../../components/Sidebar";
 import TopBar from "../../components/TopBar";
+
+interface ActivityLogRow {
+  id: number;
+  action: string;
+  description: string;
+  created_at: string;
+}
+
+interface UserNameRow {
+  full_name: string;
+}
 
 const actions = [
   "Assigned Asset",
@@ -29,8 +42,9 @@ const itStaffAllowedActions = [
 const PAGE_SIZE = 12;
 
 export default function AuditPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<{ role: Role } | null>(null);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [users, setUsers] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("All");
@@ -41,39 +55,19 @@ export default function AuditPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    const initialize = async () => {
-      const profile = await getUserProfile();
-      if (!profile) {
-        window.location.href = "/login";
-        return;
-      }
-
-      if (profile.role !== "admin" && profile.role !== "it_staff") {
-        window.location.href = "/dashboard";
-        return;
-      }
-
-      setProfile(profile);
-      await loadUsers();
-      await loadLogs(1, profile.role);
-    };
-
-    initialize();
-  }, []);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     const { data, error } = await supabase
       .from("users")
       .select("full_name")
       .order("full_name", { ascending: true });
 
     if (!error) {
-      setUsers((data || []).map((item: any) => item.full_name));
+      const mappedUsers = (data as UserNameRow[] | null)?.map((item) => item.full_name) || [];
+      setUsers(mappedUsers);
     }
-  };
+  }, []);
 
-  const buildQuery = (role: Role, countOnly = false) => {
+  const buildQuery = useCallback((role: Role, countOnly = false) => {
     const query = supabase
       .from("activity_logs")
       .select("*", { count: "exact" })
@@ -108,9 +102,9 @@ export default function AuditPage() {
     }
 
     return query;
-  };
+  }, [actionFilter, userFilter, search, fromDate, toDate, page]);
 
-  const loadLogs = async (pageNumber: number, role: Role) => {
+  const loadLogs = useCallback(async (pageNumber: number, role: Role) => {
     setNotice(null);
     const response = await buildQuery(role).range((pageNumber - 1) * PAGE_SIZE, pageNumber * PAGE_SIZE - 1);
     if (response.error) {
@@ -118,9 +112,30 @@ export default function AuditPage() {
       return;
     }
 
-    setLogs(response.data || []);
+    setLogs((response.data as ActivityLogRow[] | null) || []);
     setTotalCount(response.count || 0);
-  };
+  }, [buildQuery]);
+
+  useEffect(() => {
+    const initialize = async () => {
+      const currentProfile = await getUserProfile();
+      if (!currentProfile) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!canAccessAdmin(currentProfile.role)) {
+        router.replace("/dashboard");
+        return;
+      }
+
+      setProfile(currentProfile);
+      await loadUsers();
+      await loadLogs(1, currentProfile.role);
+    };
+
+    void initialize();
+  }, [loadLogs, loadUsers, router]);
 
   const handleSearch = async () => {
     setPage(1);
@@ -241,7 +256,7 @@ export default function AuditPage() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   container: {
     marginLeft: 260,
     padding: 30,
