@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getUserProfile, isEmployee, roleLabel, Role } from "../lib/rbac";
 
+const SUPER_ADMIN_EMAIL = "shyam@shipmanager.in";
+
+export function isSuperAdmin(user: { email?: string }) {
+  return user.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+}
+
 type WorkspaceGroup = "office" | "fleet";
 
 interface NavItem {
@@ -40,6 +46,7 @@ const FLEET_ITEMS: NavItem[] = [
 
 export default function Sidebar() {
   const [role, setRole] = useState<Role | null>(null);
+  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [expandedGroup, setExpandedGroup] = useState<WorkspaceGroup>("office");
   const pathname = usePathname();
@@ -55,6 +62,7 @@ export default function Sidebar() {
       }
 
       setRole(profile.role);
+  setUserEmail(profile.email);
       setLoading(false);
 
       if (pathname?.startsWith("/fleet")) {
@@ -81,7 +89,7 @@ export default function Sidebar() {
     );
   }
 
-  const showAdminLinks = !isEmployee(role);
+  const showAdminLinks = !isEmployee(role) || isSuperAdmin({ email: userEmail });
 
   return (
     <div style={styles.sidebar}>
