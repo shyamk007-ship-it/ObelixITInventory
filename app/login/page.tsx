@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { getPostLoginRoute, getUserProfile } from "../lib/rbac";
+import { getUserProfile } from "../lib/rbac";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 
 export default function LoginPage() {
@@ -44,12 +44,11 @@ export default function LoginPage() {
     setLoading(false);
 
     if (!profile) {
-      window.location.href = "/dashboard";
+      window.location.href = "/";
       return;
     }
 
-    const landingRoute = await getPostLoginRoute(profile);
-    window.location.href = landingRoute;
+    window.location.href = "/";
   };
 
   // FORGOT PASSWORD
@@ -71,7 +70,7 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
-      alert("Password reset email sent âœ…");
+      alert("Password reset email sent");
     }
   };
 
@@ -135,7 +134,7 @@ export default function LoginPage() {
 
         {/* FOOTER */}
         <p style={styles.dev}>
-          Â© {new Date().getFullYear()} IT Management
+          (c) {new Date().getFullYear()} IT Management
         </p>
 
         <p style={styles.devSmall}>

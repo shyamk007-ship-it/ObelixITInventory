@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
-import FleetSidebar from "../components/fleet/FleetSidebar";
-import { getPostLoginRoute, getUserProfile, isFleetRole } from "../lib/rbac";
+import FleetSidebar from "../components/FleetSidebar";
+import { getUserProfile } from "../lib/rbac";
 
 export default function FleetLayout({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -22,12 +22,6 @@ export default function FleetLayout({ children }: { children: React.ReactNode })
 
       if (!profile) {
         router.push("/login");
-        return;
-      }
-
-      if (!isFleetRole(profile.role)) {
-        const redirectTo = await getPostLoginRoute(profile);
-        router.push(redirectTo);
         return;
       }
 

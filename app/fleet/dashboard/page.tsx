@@ -85,6 +85,11 @@ export default function FleetDashboardPage() {
   };
 
   const totalAssets = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.assets_count || 0), 0), [vessels]);
+  const onlineVessels = useMemo(() => vessels.filter((vessel) => (vessel.network_health || 0) >= 85).length, [vessels]);
+  const offlineVessels = useMemo(() => vessels.filter((vessel) => (vessel.network_health || 0) < 70).length, [vessels]);
+  const openIncidents = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.open_incidents || 0), 0), [vessels]);
+  const maintenanceDue = useMemo(() => vessels.reduce((sum, vessel) => sum + (vessel.maintenance_due || 0), 0), [vessels]);
+  const fleetAlerts = useMemo(() => vessels.filter((vessel) => (vessel.open_incidents || 0) > 0 || (vessel.network_health || 0) < 75).length, [vessels]);
   const avgHealth = useMemo(() => {
     if (!vessels.length) return 0;
     return Math.round(vessels.reduce((sum, vessel) => sum + (vessel.network_health || 0), 0) / vessels.length);
@@ -101,10 +106,28 @@ export default function FleetDashboardPage() {
       </div>
 
       <div style={styles.summaryGrid}>
-        <SummaryCard label="Vessels" value={vessels.length} />
-        <SummaryCard label="Total Assets" value={totalAssets} />
-        <SummaryCard label="Avg. Network Health" value={`${avgHealth}%`} />
+        <SummaryCard label="Total Vessels" value={vessels.length} />
+        <SummaryCard label="Online Vessels" value={onlineVessels} />
+        <SummaryCard label="Offline Vessels" value={offlineVessels} />
+        <SummaryCard label="Fleet Assets" value={totalAssets} />
+        <SummaryCard label="Open Incidents" value={openIncidents} />
+        <SummaryCard label="Maintenance Due" value={maintenanceDue} />
+        <SummaryCard label="Network Status" value={`${avgHealth}%`} />
+        <SummaryCard label="Fleet Alerts" value={fleetAlerts} />
       </div>
+
+      <section style={styles.activitySection}>
+        <h2 style={styles.sectionTitle}>Recent Vessel Activity</h2>
+        <div style={styles.activityGrid}>
+          {vessels.slice(0, 6).map((vessel) => (
+            <button key={`activity-${vessel.id}`} style={styles.activityCard} onClick={() => router.push(`/fleet/vessels/${vessel.id}`)}>
+              <strong style={styles.activityName}>{vessel.vessel_name || "Unnamed Vessel"}</strong>
+              <p style={styles.activityMeta}>Network {(vessel.network_health || 0).toString()}%</p>
+              <p style={styles.activityMeta}>Incidents {(vessel.open_incidents || 0).toString()}</p>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {loading ? (
         <div style={styles.loading}>Loading fleet overview…</div>
@@ -167,6 +190,12 @@ const styles: any = {
   title: { margin: "4px 0 6px", fontSize: 28, fontWeight: 800 },
   subtitle: { margin: 0, color: "#64748b", maxWidth: 760 },
   summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 },
+  activitySection: { marginBottom: 20 },
+  sectionTitle: { margin: "0 0 12px", color: "#0f172a", fontSize: 20, fontWeight: 800 },
+  activityGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
+  activityCard: { background: "white", borderRadius: 16, border: "1px solid #e2e8f0", padding: 14, textAlign: "left", cursor: "pointer" },
+  activityName: { display: "block", color: "#0f172a", fontSize: 15 },
+  activityMeta: { margin: "6px 0 0", color: "#64748b", fontSize: 13 },
   summaryLabel: { margin: 0, color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase" },
   summaryValue: { marginTop: 6, display: "block", fontSize: 24, color: "#0f172a" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 },

@@ -154,29 +154,6 @@ const getAssignedVesselId = async (profile: UserProfile): Promise<number | null>
 };
 
 export async function getPostLoginRoute(profile: UserProfile): Promise<string> {
-  if (profile.role === "super_admin") {
-    return "/workspace";
-  }
-
-  if (profile.role === "office_admin" || profile.role === "admin" || profile.role === "it_staff") {
-    return "/office/dashboard";
-  }
-
-  if (profile.role === "fleet_admin") {
-    return "/fleet/dashboard";
-  }
-
-  if (isVesselAssignedRole(profile.role)) {
-    const vesselId = await getAssignedVesselId(profile);
-    if (vesselId) {
-      return `/fleet/vessels/${vesselId}`;
-    }
-    return "/fleet/vessels";
-  }
-
-  if (isEmployee(profile.role)) {
-    return "/employee";
-  }
-
-  return "/dashboard";
+  void profile;
+  return "/";
 }

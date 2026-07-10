@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "../components/TopBar";
-import OfficeSidebar from "../components/office/OfficeSidebar";
-import { getPostLoginRoute, getUserProfile, isOfficeRole } from "../lib/rbac";
+import OfficeSidebar from "../components/OfficeSidebar";
+import { getUserProfile } from "../lib/rbac";
 
 export default function OfficeLayout({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -16,12 +16,6 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
 
       if (!profile) {
         router.push("/login");
-        return;
-      }
-
-      if (!isOfficeRole(profile.role)) {
-        const redirectTo = await getPostLoginRoute(profile);
-        router.push(redirectTo);
         return;
       }
 

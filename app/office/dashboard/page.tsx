@@ -3,39 +3,37 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import StatsCards from "../../components/StatsCards";
 
 export default function OfficeDashboardPage() {
   const [stats, setStats] = useState<any>({
-    totalAssets: 0,
-    assignedAssets: 0,
-    availableAssets: 0,
+    officeAssets: 0,
     employees: 0,
-    openTickets: 0,
-    resolvedTickets: 0,
-    criticalIssues: 0,
+    assignments: 0,
+    tickets: 0,
     maintenanceDue: 0,
-    warrantyExpiring: 0,
+    reports: 0,
+    activity: 0,
+    users: 0,
   });
 
   useEffect(() => {
     const loadDashboard = async () => {
       const [
         totalAssetsResult,
-        assignedAssetsResult,
-        availableAssetsResult,
         employeesResult,
         ticketsResult,
+        assignmentsResult,
+        usersResult,
+        activityResult,
         maintenanceResult,
-        warrantyResult,
       ] = await Promise.all([
         supabase.from("assets").select("id", { count: "exact", head: true }),
-        supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "Assigned"),
-        supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "Available"),
         supabase.from("employees").select("id", { count: "exact", head: true }),
         supabase.from("tickets").select("status, priority"),
+        supabase.from("assignment_records").select("id", { count: "exact", head: true }),
+        supabase.from("users").select("id", { count: "exact", head: true }),
+        supabase.from("audit_logs").select("id", { count: "exact", head: true }),
         supabase.from("asset_maintenance").select("maintenance_date"),
-        supabase.from("assets").select("warranty_expiry"),
       ]);
 
       const tickets = ticketsResult.data || [];
@@ -46,24 +44,15 @@ export default function OfficeDashboardPage() {
         return days >= 0 && days <= 30;
       }).length;
 
-      const warrantyExpiring = (warrantyResult.data || []).filter((item: any) => {
-        if (!item.warranty_expiry) return false;
-        const date = new Date(item.warranty_expiry);
-        const now = new Date();
-        const days = (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        return days >= 0 && days <= 30;
-      }).length;
-
       setStats({
-        totalAssets: totalAssetsResult.count || 0,
-        assignedAssets: assignedAssetsResult.count || 0,
-        availableAssets: availableAssetsResult.count || 0,
+        officeAssets: totalAssetsResult.count || 0,
         employees: employeesResult.count || 0,
-        openTickets: tickets.filter((ticket: any) => ticket.status === "Open").length,
-        resolvedTickets: tickets.filter((ticket: any) => ticket.status === "Resolved").length,
-        criticalIssues: tickets.filter((ticket: any) => ticket.priority === "Critical").length,
+        assignments: assignmentsResult.count || 0,
+        tickets: tickets.length,
         maintenanceDue,
-        warrantyExpiring,
+        reports: tickets.filter((ticket: any) => ticket.status === "Resolved").length,
+        activity: activityResult.count || 0,
+        users: usersResult.count || 0,
       });
     };
 
@@ -80,13 +69,31 @@ export default function OfficeDashboardPage() {
         </div>
       </div>
 
-      <StatsCards stats={stats} />
+      <div style={styles.statsGrid}>
+        <MetricCard label="Office Assets" value={stats.officeAssets} />
+        <MetricCard label="Employees" value={stats.employees} />
+        <MetricCard label="Assignments" value={stats.assignments} />
+        <MetricCard label="Tickets" value={stats.tickets} />
+        <MetricCard label="Maintenance" value={stats.maintenanceDue} />
+        <MetricCard label="Reports" value={stats.reports} />
+        <MetricCard label="Activity" value={stats.activity} />
+        <MetricCard label="Users" value={stats.users} />
+      </div>
 
       <div style={styles.quickActions}>
-        <QuickCard href="/admin/assets" label="Manage Assets" description="Review asset lifecycle, transfers, and assignment status." />
-        <QuickCard href="/admin/tickets" label="Support Tickets" description="Track open incidents, escalations, and team workload." />
-        <QuickCard href="/admin/network" label="Network Monitoring" description="Review connectivity and monitoring alerts across locations." />
+        <QuickCard href="/office/assets" label="Manage Assets" description="Review asset lifecycle, transfers, and assignment status." />
+        <QuickCard href="/office/tickets" label="Support Tickets" description="Track open incidents, escalations, and team workload." />
+        <QuickCard href="/office/network" label="Network Monitoring" description="Review connectivity and monitoring alerts across locations." />
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={styles.metricCard}>
+      <p style={styles.metricLabel}>{label}</p>
+      <strong style={styles.metricValue}>{value}</strong>
     </div>
   );
 }
@@ -121,6 +128,33 @@ const styles: any = {
   subtitle: {
     margin: 0,
     color: "#64748b",
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 14,
+    marginBottom: 20,
+  },
+  metricCard: {
+    background: "white",
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    padding: "14px 16px",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
+  },
+  metricLabel: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 700,
+    textTransform: "uppercase",
+  },
+  metricValue: {
+    display: "block",
+    marginTop: 6,
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: 800,
   },
   quickActions: {
     display: "grid",
