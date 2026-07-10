@@ -38,7 +38,13 @@ export default function Sidebar() {
   if (loading || !role) {
     return (
       <div style={styles.sidebar}>
-        <p style={styles.loading}>Loading menu...</p>
+        <div style={styles.brand}>
+          <h2 style={styles.logo}>IT Management</h2>
+          <span style={styles.roleBadge}>Loading...</span>
+        </div>
+        <div style={styles.loadingWrap}>
+          <p style={styles.loading}>Loading menu...</p>
+        </div>
       </div>
     );
   }
@@ -52,7 +58,7 @@ export default function Sidebar() {
         <span style={styles.roleBadge}>{roleLabel[role]}</span>
       </div>
 
-      <nav style={styles.nav}>
+      <nav className="sidebar-menu-scroll" style={styles.nav}>
         {showAdminLinks ? (
           <>
             <Link href="/dashboard" style={styles.link}>
@@ -151,6 +157,30 @@ export default function Sidebar() {
           </>
         )}
       </nav>
+
+      <style jsx global>{`
+        .sidebar-menu-scroll {
+          scroll-behavior: smooth;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .sidebar-menu-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .sidebar-menu-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .sidebar-menu-scroll::-webkit-scrollbar-thumb {
+          background: #475569;
+          border-radius: 999px;
+        }
+
+        .sidebar-menu-scroll::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+      `}</style>
     </div>
   );
 }
@@ -165,6 +195,9 @@ const styles: any = {
     position: "fixed",
     left: 0,
     top: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
   },
 
   logo: {
@@ -174,7 +207,14 @@ const styles: any = {
   },
 
   brand: {
+    flexShrink: 0,
     marginBottom: 28,
+  },
+
+  loadingWrap: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
   },
 
   roleBadge: {
@@ -194,9 +234,15 @@ const styles: any = {
   },
 
   nav: {
+    flex: 1,
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
     gap: 14,
+    overflowY: "auto",
+    overflowX: "hidden",
+    scrollbarWidth: "thin",
+    scrollbarColor: "#475569 transparent",
   },
 
   link: {
