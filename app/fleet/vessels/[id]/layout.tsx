@@ -87,17 +87,17 @@ export default function VesselLayout({
   return (
     <div style={styles.shell}>
       <aside style={styles.sidebarWrapper}>
-        <nav style={styles.sidebar}>
-          <div style={styles.sidebarHeader}>
-            <div style={styles.shipIcon}>🚢</div>
-            <div>
-              <h3 style={styles.vesselName}>{vessel.vessel_name}</h3>
-              <p style={styles.vesselIMO}>{vessel.imo_number}</p>
-            </div>
+        <div style={styles.sidebarHeader}>
+          <div style={styles.shipIcon}>🚢</div>
+          <div>
+            <h3 style={styles.vesselName}>{vessel.vessel_name}</h3>
+            <p style={styles.vesselIMO}>{vessel.imo_number}</p>
           </div>
+        </div>
 
-          <div style={styles.divider} />
+        <div style={styles.divider} />
 
+        <nav className="fleet-sidebar-scroll" style={styles.navScrollArea}>
           <div style={styles.navItems}>
             <NavLink href={`/fleet/vessels/${vesselId}`} label="Overview" active={isActive(pathname, `/fleet/vessels/${vesselId}`)} />
             <NavLink
@@ -146,16 +146,47 @@ export default function VesselLayout({
               active={isActive(pathname, `/fleet/vessels/${vesselId}/settings`)}
             />
           </div>
-
-          <div style={styles.divider} />
-
-          <Link href="/fleet/dashboard">
-            <button style={styles.backNavButton}>← Back to Fleet</button>
-          </Link>
         </nav>
+
+        <div style={styles.divider} />
+
+        <div style={styles.footerArea}>
+          <Link href="/fleet/dashboard" style={styles.backNavButton}>
+            ← Back to Fleet
+          </Link>
+        </div>
       </aside>
 
-      <main style={styles.content}>{children}</main>
+      <main className="fleet-main-scroll" style={styles.content}>{children}</main>
+      <style jsx global>{`
+        .fleet-sidebar-scroll,
+        .fleet-main-scroll {
+          scroll-behavior: smooth;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .fleet-sidebar-scroll::-webkit-scrollbar,
+        .fleet-main-scroll::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        .fleet-sidebar-scroll::-webkit-scrollbar-track,
+        .fleet-main-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .fleet-sidebar-scroll::-webkit-scrollbar-thumb,
+        .fleet-main-scroll::-webkit-scrollbar-thumb {
+          background: #475569;
+          border-radius: 999px;
+        }
+
+        .fleet-sidebar-scroll::-webkit-scrollbar-thumb:hover,
+        .fleet-main-scroll::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+      `}</style>
     </div>
   );
 }
@@ -249,18 +280,14 @@ const styles: any = {
     left: 0,
     top: 0,
     height: "100vh",
-    overflowY: "auto" as const,
-    overflowX: "hidden",
-    scrollbarWidth: "thin" as const,
-    scrollbarColor: "rgba(148, 163, 184, 0.45) transparent",
-  },
-  sidebar: {
     padding: 20,
     display: "flex",
     flexDirection: "column" as const,
     minHeight: "100%",
+    overflow: "hidden",
   },
   sidebarHeader: {
+    flexShrink: 0,
     display: "flex",
     gap: 12,
     alignItems: "flex-start",
@@ -283,15 +310,25 @@ const styles: any = {
     fontWeight: 500,
   },
   divider: {
+    flexShrink: 0,
     height: 1,
     background: "rgba(148, 163, 184, 0.16)",
     margin: "16px 0",
+  },
+  navScrollArea: {
+    flex: 1,
+    overflowY: "auto" as const,
+    overflowX: "hidden",
+    minHeight: 0,
+    scrollBehavior: "smooth",
+    scrollbarWidth: "thin" as const,
+    scrollbarColor: "#475569 transparent",
+    overscrollBehavior: "contain" as const,
   },
   navItems: {
     display: "flex",
     flexDirection: "column" as const,
     gap: 2,
-    flex: 1,
   },
   navItem: {
     padding: "10px 12px",
@@ -317,6 +354,13 @@ const styles: any = {
     fontWeight: 600,
     fontSize: 13,
     transition: "background-color 0.2s",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
+  },
+  footerArea: {
+    flexShrink: 0,
   },
   content: {
     flex: 1,
@@ -325,8 +369,10 @@ const styles: any = {
     overflowY: "auto" as const,
     overflowX: "hidden",
     background: "#f8fbff",
+    scrollBehavior: "smooth",
     scrollbarWidth: "thin" as const,
     scrollbarColor: "rgba(100, 116, 139, 0.55) transparent",
   },
 };
+
 
