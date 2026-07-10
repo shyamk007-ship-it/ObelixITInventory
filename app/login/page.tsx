@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { getUserProfile, isEmployee } from "../lib/rbac";
+import { getPostLoginRoute, getUserProfile } from "../lib/rbac";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 
 export default function LoginPage() {
@@ -43,12 +43,13 @@ export default function LoginPage() {
 
     setLoading(false);
 
-    if (profile && isEmployee(profile.role)) {
-      window.location.href = "/employee";
+    if (!profile) {
+      window.location.href = "/dashboard";
       return;
     }
 
-    window.location.href = "/dashboard";
+    const landingRoute = await getPostLoginRoute(profile);
+    window.location.href = landingRoute;
   };
 
   // FORGOT PASSWORD

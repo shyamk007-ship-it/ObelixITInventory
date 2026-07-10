@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "./lib/supabase";
-import { getUserProfile, isEmployee } from "./lib/rbac";
+import { getPostLoginRoute, getUserProfile } from "./lib/rbac";
 
 export default function Home() {
   const router = useRouter();
@@ -26,7 +26,8 @@ export default function Home() {
         return;
       }
 
-      router.push(isEmployee(profile.role) ? "/employee" : "/dashboard");
+      const landingRoute = await getPostLoginRoute(profile);
+      router.push(landingRoute);
     };
 
     init();
