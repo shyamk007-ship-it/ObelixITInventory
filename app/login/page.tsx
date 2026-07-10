@@ -1,8 +1,9 @@
 ﻿"use client";
 
 import { useState } from "react";
+import type { FormEvent, CSSProperties } from "react";
 import { supabase } from "../lib/supabase";
-import { getUserProfile } from "../lib/rbac";
+import { getPostLoginRoute, getUserProfile } from "../lib/rbac";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 
 export default function LoginPage() {
@@ -11,7 +12,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   // LOGIN FUNCTION
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setLoading(true);
@@ -43,12 +44,8 @@ export default function LoginPage() {
 
     setLoading(false);
 
-    if (!profile) {
-      window.location.href = "/";
-      return;
-    }
-
-    window.location.href = "/";
+    const landingRoute = profile ? await getPostLoginRoute(profile) : "/";
+    window.location.href = landingRoute;
   };
 
   // FORGOT PASSWORD
@@ -145,7 +142,7 @@ export default function LoginPage() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   container: {
     height: "100vh",
     display: "flex",

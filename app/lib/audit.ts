@@ -28,11 +28,17 @@ export const createAuditLog = async ({
     created_at: getTimestamp(),
   };
 
-  const { error } = await supabase.from("activity_logs").insert([payload]);
+  const auditTables = ["audit_logs", "activity_logs"];
 
-  if (error) {
-    console.warn("Audit log failed:", error.message);
+  for (const table of auditTables) {
+    const { error } = await supabase.from(table).insert([payload]);
+
+    if (!error) {
+      return;
+    }
   }
+
+  console.warn("Audit log failed:", action);
 };
 
 export const createNotification = async ({
@@ -50,7 +56,7 @@ export const createNotification = async ({
   recordType?: string;
   recordId?: string | number;
 }) => {
-  const payload: any = {
+  const payload: Record<string, string | boolean> = {
     title,
     message,
     action,

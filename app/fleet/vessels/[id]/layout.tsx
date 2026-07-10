@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { usePathname, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
+import { buildAuditDescription, createAuditLog } from "../../../lib/audit";
+import { useEnterpriseAccess } from "../../../components/shared/EnterpriseAccessProvider";
+import { canAccessVesselAssignments } from "../../../lib/rbac";
 
 interface Vessel {
   id: number;
@@ -20,18 +25,17 @@ export default function VesselLayout({
 }) {
   const params = useParams();
   const pathname = usePathname();
+  const router = useRouter();
   const vesselId = params?.id as string;
+  const { loading: accessLoading, profile, assignments } = useEnterpriseAccess();
+  const routeLogged = useRef(false);
+  const loadTimerRef = useRef<number | null>(null);
   
   const [vessel, setVessel] = useState<Vessel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!vesselId) return;
-    void loadVessel();
-  }, [vesselId]);
-
-  const loadVessel = async () => {
+  const loadVessel = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -56,7 +60,55 @@ export default function VesselLayout({
     } finally {
       setLoading(false);
     }
-  };
+  }, [vesselId]);
+
+  useEffect(() => {
+    if (accessLoading) return;
+
+    if (!profile) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!vesselId || !canAccessVesselAssignments(assignments, vesselId)) {
+      void createAuditLog({
+        action: "Permission Denied",
+        description: buildAuditDescription({
+          event: "Permission Denied",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: pathname || "/fleet/vessels/[id]",
+          context: "Vessel access denied",
+        }),
+      });
+      router.replace("/unauthorized");
+      return;
+    }
+
+    if (!routeLogged.current) {
+      routeLogged.current = true;
+      void createAuditLog({
+        action: "Route Access",
+        description: buildAuditDescription({
+          event: "Route Access",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: `Vessel ${vesselId}`,
+          context: pathname || `/fleet/vessels/${vesselId}`,
+        }),
+      });
+    }
+
+    loadTimerRef.current = window.setTimeout(() => {
+      void loadVessel();
+    }, 0);
+
+    return () => {
+      if (loadTimerRef.current !== null) {
+        window.clearTimeout(loadTimerRef.current);
+      }
+    };
+  }, [accessLoading, assignments, loadVessel, pathname, profile, router, vesselId]);
 
   if (loading) {
     return (
@@ -212,7 +264,7 @@ function isActive(pathname: string | null, target: string) {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#0b1220",

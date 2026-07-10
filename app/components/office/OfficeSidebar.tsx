@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEnterpriseAccess } from "../shared/EnterpriseAccessProvider";
+import { roleLabel } from "../../lib/rbac";
 
 const links = [
   { href: "/office/dashboard", label: "Dashboard" },
@@ -21,27 +23,35 @@ const links = [
 
 export default function OfficeSidebar() {
   const pathname = usePathname();
+  const { activeAssignment } = useEnterpriseAccess();
+  const isSuperAdmin = activeAssignment?.role === "super_admin";
+
+  const visibleLinks = links.filter((link) => link.href !== "/office/settings" || isSuperAdmin);
 
   return (
     <aside style={styles.sidebar}>
       <div style={styles.brand}>
         <h2 style={styles.logo}>IT Management</h2>
-        <span style={styles.badge}>Office Operations</span>
+        <span style={styles.badge}>{activeAssignment ? roleLabel[activeAssignment.role] : "Office Workspace"}</span>
       </div>
 
       <nav style={styles.nav}>
-        {links.map((link) => (
-          <Link
-            key={`${link.href}-${link.label}`}
-            href={link.href}
-            style={{
-              ...styles.link,
-              ...(pathname === link.href || pathname.startsWith(`${link.href}/`) ? styles.linkActive : {}),
-            }}
-          >
-            {link.label}
-          </Link>
-        ))}
+        {visibleLinks.map((link) => {
+          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+
+          return (
+            <Link
+              key={`${link.href}-${link.label}`}
+              href={link.href}
+              style={{
+                ...styles.link,
+                ...(active ? styles.linkActive : {}),
+              }}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
       </nav>
     </aside>
   );

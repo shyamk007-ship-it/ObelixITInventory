@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import ProfileMenu from "./ProfileMenu";
 import NotificationBell from "./NotificationBell";
 
@@ -22,7 +23,7 @@ export default function TopBar() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   topbar: {
     display: "flex",
     justifyContent: "space-between",

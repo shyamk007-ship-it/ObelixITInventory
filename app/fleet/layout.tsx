@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import FleetSidebar from "../components/fleet/FleetSidebar";
 import FleetHeader from "../components/fleet/FleetHeader";
-import { getUserProfile } from "../lib/rbac";
+import { buildAuditDescription, createAuditLog } from "../lib/audit";
+import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
+import { canAccessWorkspaceAssignments } from "../lib/rbac";
 
 export default function FleetLayout({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { loading, profile, assignments, currentWorkspace } = useEnterpriseAccess();
+  const loggedAccess = useRef(false);
 
   const isVesselWorkspace = useMemo(() => {
     if (!pathname) return false;
@@ -18,21 +21,44 @@ export default function FleetLayout({ children }: { children: React.ReactNode })
   }, [pathname]);
 
   useEffect(() => {
-    const verify = async () => {
-      const profile = await getUserProfile();
+    if (loading) return;
 
-      if (!profile) {
-        router.push("/login");
-        return;
-      }
+    if (!profile) {
+      router.replace("/login");
+      return;
+    }
 
-      setReady(true);
-    };
+    if (!canAccessWorkspaceAssignments(assignments, "fleet")) {
+      void createAuditLog({
+        action: "Permission Denied",
+        description: buildAuditDescription({
+          event: "Permission Denied",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: "/fleet",
+          context: "Workspace access denied",
+        }),
+      });
+      router.replace("/unauthorized");
+      return;
+    }
 
-    void verify();
-  }, [router]);
+    if (!loggedAccess.current) {
+      loggedAccess.current = true;
+      void createAuditLog({
+        action: "Route Access",
+        description: buildAuditDescription({
+          event: "Route Access",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: currentWorkspace,
+          context: pathname || "/fleet",
+        }),
+      });
+    }
+  }, [loading, profile, assignments, currentWorkspace, pathname, router]);
 
-  if (!ready) {
+  if (loading || !profile || !canAccessWorkspaceAssignments(assignments, "fleet")) {
     return (
       <div style={styles.loading}>
         <p>Preparing Fleet workspace...</p>

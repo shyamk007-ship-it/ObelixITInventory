@@ -1,48 +1,46 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import { getUserProfile, roleLabel, Role } from "../lib/rbac";
-import { createAuditLog, buildAuditDescription } from "../lib/audit";
+import { buildAuditDescription, createAuditLog } from "../lib/audit";
+import { useEnterpriseAccess } from "./shared/EnterpriseAccessProvider";
+import { getWorkspaceLabel, roleLabel } from "../lib/rbac";
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
-  const [userName, setUserName] = useState("Admin");
-  const [role, setRole] = useState<Role>("unknown");
-
   const router = useRouter();
+  const { loading, profile, activeAssignment, assignments, switchAssignment } = useEnterpriseAccess();
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const profile = await getUserProfile();
-
-      if (!profile) {
-        router.push("/login");
-        return;
-      }
-
-      setUserName(profile.full_name);
-      setRole(profile.role);
-    };
-
-    fetchUser();
-  }, [router]);
+    if (!loading && !profile) {
+      router.push("/login");
+    }
+  }, [loading, profile, router]);
 
   const handleLogout = async () => {
     await createAuditLog({
       action: "Logout",
       description: buildAuditDescription({
         event: "Logout",
-        userName,
+        userName: profile?.full_name || "Unknown User",
         recordType: "user",
-        itemName: userName,
+        itemName: profile?.full_name || "Unknown User",
       }),
     });
 
     await supabase.auth.signOut();
     router.push("/login");
   };
+
+  const handleSwitch = async (assignmentId: number) => {
+    setOpen(false);
+    await switchAssignment(assignmentId);
+  };
+
+  const currentRole = activeAssignment ? roleLabel[activeAssignment.role] : "Unknown";
+  const currentWorkspace = activeAssignment ? getWorkspaceLabel(activeAssignment.workspace) : "Company Portal";
 
   return (
     <div style={styles.wrapper}>
@@ -52,34 +50,41 @@ export default function ProfileMenu() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
       >
-        <div style={styles.avatar}>
-          {userName.charAt(0).toUpperCase()}
-        </div>
+        <div style={styles.avatar}>{(profile?.full_name || "U").charAt(0).toUpperCase()}</div>
 
         <div style={styles.userInfo}>
           <span style={styles.userLabel}>Signed in as</span>
-          <span style={styles.userName}>{userName}</span>
+          <span style={styles.userName}>{profile?.full_name || "User"}</span>
         </div>
       </button>
 
       {open && (
         <div style={styles.dropdown}>
           <div style={styles.profileHeader}>
-            <span style={styles.profileName}>{userName}</span>
-            <span style={styles.roleBadge}>{roleLabel[role] || "Unknown"}</span>
+            <span style={styles.profileName}>{profile?.full_name || "User"}</span>
+            <span style={styles.roleBadge}>{currentRole}</span>
+            <span style={styles.workspaceBadge}>{currentWorkspace}</span>
           </div>
-          <button style={styles.dropdownItem} type="button">
-            Profile
-          </button>
-          <button style={styles.dropdownItem} type="button">
-            Settings
-          </button>
+
+          {assignments.length > 1 && <div style={styles.switchLabel}>Switch Workspace</div>}
+
+          {assignments.map((assignment) => (
+            <button
+              key={assignment.id}
+              type="button"
+              style={{
+                ...styles.dropdownItem,
+                ...(activeAssignment?.id === assignment.id ? styles.dropdownItemActive : {}),
+              }}
+              onClick={() => handleSwitch(assignment.id)}
+            >
+              {roleLabel[assignment.role]}{assignment.vessel_id ? ` - Vessel ${assignment.vessel_id}` : ""}
+            </button>
+          ))}
+
           <button
-            style={{
-              ...styles.dropdownItem,
-              color: "#ef4444",
-            }}
             type="button"
+            style={{ ...styles.dropdownItem, color: "#ef4444" }}
             onClick={handleLogout}
           >
             Logout
@@ -90,11 +95,10 @@ export default function ProfileMenu() {
   );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   wrapper: {
     position: "relative",
   },
-
   profileButton: {
     display: "flex",
     alignItems: "center",
@@ -107,7 +111,6 @@ const styles: any = {
     minWidth: 180,
     justifyContent: "center",
   },
-
   avatar: {
     width: 44,
     height: 44,
@@ -120,20 +123,17 @@ const styles: any = {
     fontWeight: "bold",
     fontSize: 18,
   },
-
   userInfo: {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
     minWidth: 0,
   },
-
   userLabel: {
     fontSize: 12,
     color: "#64748b",
     lineHeight: 1.2,
   },
-
   userName: {
     fontSize: 14,
     fontWeight: 700,
@@ -143,7 +143,6 @@ const styles: any = {
     textOverflow: "ellipsis",
     maxWidth: 120,
   },
-
   dropdown: {
     position: "absolute",
     top: 70,
@@ -152,23 +151,20 @@ const styles: any = {
     borderRadius: 16,
     boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
     overflow: "hidden",
-    minWidth: 220,
+    minWidth: 260,
     zIndex: 999,
     border: "1px solid #e2e8f0",
   },
-
   profileHeader: {
     padding: "16px 16px 8px",
     borderBottom: "1px solid #e2e8f0",
   },
-
   profileName: {
     display: "block",
     fontWeight: 700,
     color: "#0f172a",
     marginBottom: 6,
   },
-
   roleBadge: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -177,8 +173,26 @@ const styles: any = {
     color: "#1d4ed8",
     fontSize: 12,
     fontWeight: 700,
+    marginRight: 8,
+    marginBottom: 8,
   },
-
+  workspaceBadge: {
+    display: "inline-flex",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  switchLabel: {
+    padding: "10px 16px 6px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
   dropdownItem: {
     width: "100%",
     textAlign: "left",
@@ -190,5 +204,9 @@ const styles: any = {
     fontSize: 14,
     fontWeight: 600,
     transition: "background 0.15s ease, color 0.15s ease",
+  },
+  dropdownItemActive: {
+    background: "#eff6ff",
+    color: "#1d4ed8",
   },
 };

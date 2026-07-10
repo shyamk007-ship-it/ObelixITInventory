@@ -1,32 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import OfficeSidebar from "../components/office/OfficeSidebar";
 import OfficeHeader from "../components/office/OfficeHeader";
-import { getUserProfile } from "../lib/rbac";
+import { createAuditLog, buildAuditDescription } from "../lib/audit";
+import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
+import { canAccessWorkspaceAssignments } from "../lib/rbac";
 
 export default function OfficeLayout({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
   const router = useRouter();
+  const { loading, profile, assignments, currentWorkspace } = useEnterpriseAccess();
+  const loggedAccess = useRef(false);
 
   useEffect(() => {
-    const verify = async () => {
-      const profile = await getUserProfile();
+    if (loading) return;
 
-      if (!profile) {
-        router.push("/login");
-        return;
-      }
+    if (!profile) {
+      router.replace("/login");
+      return;
+    }
 
-      setReady(true);
-    };
+    if (!canAccessWorkspaceAssignments(assignments, "office")) {
+      void createAuditLog({
+        action: "Permission Denied",
+        description: buildAuditDescription({
+          event: "Permission Denied",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: "/office",
+          context: "Workspace access denied",
+        }),
+      });
+      router.replace("/unauthorized");
+      return;
+    }
 
-    void verify();
-  }, [router]);
+    if (!loggedAccess.current) {
+      loggedAccess.current = true;
+      void createAuditLog({
+        action: "Route Access",
+        description: buildAuditDescription({
+          event: "Route Access",
+          userName: profile.full_name,
+          recordType: "route",
+          itemName: currentWorkspace,
+          context: "/office",
+        }),
+      });
+    }
+  }, [loading, profile, assignments, currentWorkspace, router]);
 
-  if (!ready) {
+  if (loading || !profile || !canAccessWorkspaceAssignments(assignments, "office")) {
     return (
       <div style={styles.loading}>
         <p>Preparing Office workspace...</p>

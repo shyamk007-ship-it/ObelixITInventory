@@ -1,4 +1,5 @@
 import "./globals.css";
+import { EnterpriseAccessProvider } from "./components/shared/EnterpriseAccessProvider";
 
 export const metadata = {
   title: "IT Management",
@@ -12,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <EnterpriseAccessProvider>{children}</EnterpriseAccessProvider>
+      </body>
     </html>
   );
 }
