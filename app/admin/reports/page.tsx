@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { ticketCategories, ticketPriorities, ticketStatuses } from "../../lib/helpdesk";
+import { getWorkspaceScopeFromPathname } from "../../lib/workspace";
 import {
   BarChart,
   Bar,
@@ -25,6 +27,8 @@ const EXPORT_TYPES = {
 const toDateKey = (date?: string) => (date ? new Date(date).toISOString().slice(0, 10) : "");
 
 export default function ReportsPage() {
+  const pathname = usePathname();
+  const workspaceScope = getWorkspaceScopeFromPathname(pathname);
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [stats, setStats] = useState<any>({
@@ -50,7 +54,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports();
-  }, []);
+  }, [workspaceScope]);
 
   useEffect(() => {
     loadReports();
@@ -68,24 +72,43 @@ export default function ReportsPage() {
   const loadReports = async () => {
     setLoading(true);
 
+    let assetsQuery = supabase.from("assets").select("id, asset_name, status, warranty_expiry, vessel_id");
+    if (workspaceScope === "office") {
+      assetsQuery = assetsQuery.is("vessel_id", null);
+    } else if (workspaceScope === "fleet") {
+      assetsQuery = assetsQuery.not("vessel_id", "is", null);
+    }
+
+    let ticketsQuery = supabase.from("tickets").select("id, title, category, priority, status, created_at, vessel_id");
+    if (workspaceScope === "office") {
+      ticketsQuery = ticketsQuery.is("vessel_id", null);
+    } else if (workspaceScope === "fleet") {
+      ticketsQuery = ticketsQuery.not("vessel_id", "is", null);
+    }
+
     const [
       { data: assetData },
-      { data: assignmentData },
       { data: employeeData },
       { data: maintenanceData },
       { data: ticketData },
     ] = await Promise.all([
-      supabase.from("assets").select("id, asset_name, status, warranty_expiry"),
-      supabase.from("asset_assignments").select("id, status, employee_id, asset_id, assigned_date, returned_date, assets(asset_name), employees(full_name)"),
+      assetsQuery,
       supabase.from("employees").select("id, full_name"),
       supabase.from("asset_maintenance").select("id, asset_id, maintenance_date, status, assets(asset_name), vendor"),
-      supabase.from("tickets").select("id, title, category, priority, status, created_at"),
+      ticketsQuery,
     ]);
 
     const assets = assetData || [];
+    const assetIds = assets.map((asset: any) => asset.id);
+    const { data: assignmentData } = assetIds.length
+      ? await supabase
+          .from("asset_assignments")
+          .select("id, status, employee_id, asset_id, assigned_date, returned_date, assets(asset_name), employees(full_name)")
+          .in("asset_id", assetIds)
+      : { data: [] };
     const assignments = assignmentData || [];
     const employees = employeeData || [];
-    const maintenance = maintenanceData || [];
+    const maintenance = (maintenanceData || []).filter((record: any) => assetIds.includes(record.asset_id));
     const tickets = ticketData || [];
 
     const totalAssets = assets.length;

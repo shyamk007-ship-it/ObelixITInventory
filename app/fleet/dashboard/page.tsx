@@ -50,9 +50,9 @@ export default function FleetDashboardPage() {
     const loadFleetData = async () => {
       const [vesselsResult, assetsResult, maintenanceResult, ticketResult, checklistResult] = await Promise.all([
         supabase.from("vessels").select("id, vessel_name, status").order("vessel_name", { ascending: true }),
-        supabase.from("assets").select("id, vessel_id"),
+        supabase.from("assets").select("id, vessel_id").not("vessel_id", "is", null),
         supabase.from("asset_maintenance").select("id, asset_id, status"),
-        supabase.from("tickets").select("id, vessel_id, status"),
+        supabase.from("tickets").select("id, vessel_id, status").not("vessel_id", "is", null),
         supabase.from("vessel_checklists").select("id, status"),
       ]);
 

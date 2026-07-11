@@ -1,9 +1,11 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
+import { getWorkspaceScopeFromPathname } from "../../lib/workspace";
 
 interface Asset {
   id: string | number;
@@ -11,6 +13,7 @@ interface Asset {
   asset_tag: string;
   status: string;
   category?: string;
+  vessel_id?: number | null;
 }
 
 interface Employee {
@@ -39,6 +42,8 @@ const todayDate = new Date().toISOString().split("T")[0];
 const assignmentStatuses = ["Assigned", "Returned", "Lost", "Damaged"] as const;
 
 export default function AssignmentsPage() {
+  const pathname = usePathname();
+  const workspaceScope = getWorkspaceScopeFromPathname(pathname);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -59,23 +64,43 @@ export default function AssignmentsPage() {
   const [returnStatus, setReturnStatus] = useState<"Returned" | "Lost" | "Damaged">("Returned");
 
   useEffect(() => {
-    loadAssets();
-    loadEmployees();
-    loadAssignments();
-  }, []);
+    void loadWorkspaceData();
+  }, [workspaceScope]);
+
+  const loadWorkspaceData = async () => {
+    const loadedAssets = await loadAssets();
+    await Promise.all([loadEmployees(), loadAssignments(loadedAssets.map((asset) => asset.id))]);
+  };
 
   const loadAssets = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("assets")
-      .select("id, asset_name, asset_tag, status, category")
+      .select("id, asset_name, asset_tag, status, category, vessel_id")
       .order("asset_name", { ascending: true });
 
-    if (!error) {
-      setAssets(data || []);
+    if (workspaceScope === "office") {
+      query = query.is("vessel_id", null);
+    } else if (workspaceScope === "fleet") {
+      query = query.not("vessel_id", "is", null);
     }
+
+    const { data, error } = await query;
+
+    if (!error) {
+      const rows = (data as Asset[]) || [];
+      setAssets(rows);
+      return rows;
+    }
+
+    return [] as Asset[];
   };
 
   const loadEmployees = async () => {
+    if (workspaceScope === "fleet") {
+      setEmployees([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("employees")
       .select("id, full_name, email, department")
@@ -86,10 +111,16 @@ export default function AssignmentsPage() {
     }
   };
 
-  const loadAssignments = async () => {
+  const loadAssignments = async (assetIds: Array<string | number> = []) => {
+    if (assetIds.length === 0) {
+      setAssignments([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("assignment_records")
-      .select(`*, assets(id, asset_name, asset_tag, category), employees(id, full_name, email, department)`)
+      .select(`*, assets(id, asset_name, asset_tag, category, vessel_id), employees(id, full_name, email, department)`)
+      .in("asset_id", assetIds)
       .order("assigned_date", { ascending: false });
 
     if (!error) {
@@ -174,8 +205,8 @@ export default function AssignmentsPage() {
       setNotes("");
       setShowAssignModal(false);
 
-      await loadAssets();
-      await loadAssignments();
+      const refreshedAssets = await loadAssets();
+      await loadAssignments(refreshedAssets.map((asset) => asset.id));
     } catch (error: any) {
       alert(error?.message || "Failed to assign asset.");
     } finally {
@@ -251,8 +282,8 @@ export default function AssignmentsPage() {
       setSelectedAssignment(null);
       setReturnNotes("");
 
-      await loadAssets();
-      await loadAssignments();
+      const refreshedAssets = await loadAssets();
+      await loadAssignments(refreshedAssets.map((asset) => asset.id));
     } catch (error: any) {
       alert(error?.message || "Failed to process return.");
     } finally {

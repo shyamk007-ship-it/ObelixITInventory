@@ -15,10 +15,8 @@ const links = [
   { href: "/office/maintenance", label: "Maintenance" },
   { href: "/office/network", label: "Network Monitoring" },
   { href: "/office/reports", label: "Reports" },
-  { href: "/office/activity", label: "Activity Logs" },
   { href: "/office/users", label: "Users" },
   { href: "/office/settings", label: "Settings" },
-  { href: "/", label: "← Back to Company Portal" },
 ];
 
 export default function OfficeSidebar() {
@@ -53,6 +51,10 @@ export default function OfficeSidebar() {
           );
         })}
       </nav>
+
+      <Link href="/" style={styles.portalLink}>
+        Back to Company Portal
+      </Link>
     </aside>
   );
 }
@@ -101,6 +103,14 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     scrollbarWidth: "thin",
     scrollbarColor: "#475569 transparent",
+  },
+  portalLink: {
+    flexShrink: 0,
+    marginTop: 12,
+    color: "#cbd5e1",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 700,
   },
   link: {
     color: "white",

@@ -12,6 +12,7 @@ interface TicketRow {
 }
 
 interface MaintenanceRow {
+  asset_id?: number | null;
   maintenance_date?: string | null;
   status?: string | null;
 }
@@ -44,30 +45,31 @@ export default function OfficeDashboardPage() {
 
   useEffect(() => {
     const loadOfficeDashboard = async () => {
-      const [
-        totalAssetsResult,
-        assignedAssetsResult,
-        availableAssetsResult,
-        employeesResult,
-        ticketsResult,
-        maintenanceResult,
-        warrantyResult,
-        activityResult,
-      ] = await Promise.all([
-        supabase.from("assets").select("id", { count: "exact", head: true }),
-        supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "Assigned"),
-        supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "Available"),
+      const officeAssetsResult = await supabase
+        .from("assets")
+        .select("id, status, warranty_expiry")
+        .is("vessel_id", null);
+
+      const officeAssets = officeAssetsResult.data || [];
+      const officeAssetIds = officeAssets.map((asset) => asset.id);
+
+      const [employeesResult, ticketsResult, maintenanceResult, activityResult] = await Promise.all([
         supabase.from("employees").select("id", { count: "exact", head: true }),
-        supabase.from("tickets").select("status, priority"),
-        supabase.from("asset_maintenance").select("maintenance_date, status"),
-        supabase.from("assets").select("warranty_expiry"),
+        supabase.from("tickets").select("status, priority").is("vessel_id", null),
+        supabase.from("asset_maintenance").select("maintenance_date, status, asset_id"),
         supabase.from("audit_logs").select("id", { count: "exact", head: true }),
       ]);
 
       const tickets: TicketRow[] = ticketsResult.data || [];
-      const maintenanceRows: MaintenanceRow[] = maintenanceResult.data || [];
-      const warrantyRows: WarrantyRow[] = warrantyResult.data || [];
+      const maintenanceRows: MaintenanceRow[] = ((maintenanceResult.data || []) as MaintenanceRow[]).filter((item) =>
+        officeAssetIds.includes(item.asset_id || 0)
+      );
+      const warrantyRows: WarrantyRow[] = officeAssets;
       const now = new Date();
+
+      const totalAssets = officeAssets.length;
+      const assignedAssets = officeAssets.filter((asset) => asset.status === "Assigned").length;
+      const availableAssets = officeAssets.filter((asset) => asset.status === "Available").length;
 
       const maintenanceDue = maintenanceRows.filter((item) => {
         if (!item.maintenance_date) return false;
@@ -83,9 +85,6 @@ export default function OfficeDashboardPage() {
         return days >= 0 && days <= 30;
       }).length;
 
-      const totalAssets = totalAssetsResult.count || 0;
-      const assignedAssets = assignedAssetsResult.count || 0;
-      const availableAssets = availableAssetsResult.count || 0;
       const employees = employeesResult.count || 0;
       const openTickets = tickets.filter((ticket) => ticket.status === "Open").length;
       const resolvedTickets = tickets.filter((ticket) => ticket.status === "Resolved").length;

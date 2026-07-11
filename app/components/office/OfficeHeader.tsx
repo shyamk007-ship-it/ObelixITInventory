@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import NotificationBell from "../shared/NotificationBell";
 import UserProfile from "../shared/UserProfile";
 import SearchBar from "../shared/SearchBar";
@@ -8,12 +8,14 @@ import SearchBar from "../shared/SearchBar";
 interface OfficeHeaderProps {
   title: string;
   subtitle: string;
+  breadcrumbs?: ReactNode;
 }
 
-export default function OfficeHeader({ title, subtitle }: OfficeHeaderProps) {
+export default function OfficeHeader({ title, subtitle, breadcrumbs }: OfficeHeaderProps) {
   return (
     <header style={styles.wrap}>
       <div style={styles.left}>
+        {breadcrumbs}
         <p style={styles.eyebrow}>Office Workspace</p>
         <h1 style={styles.title}>{title}</h1>
         <p style={styles.subtitle}>{subtitle}</p>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CreateUserPayload,
   RoleAssignmentInput,
@@ -11,6 +11,11 @@ import {
 } from "../../lib/user-management";
 import { canManageUsers, getUserProfile, isOwnerEmail } from "../../lib/rbac";
 import { supabase } from "../../lib/supabase";
+import {
+  getWorkspaceDefaultAssignment,
+  getWorkspaceScopeFromPathname,
+  matchesUserWorkspace,
+} from "../../lib/workspace";
 
 interface UsersApiResponse {
   success?: boolean;
@@ -45,27 +50,30 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 type StatusFilter = "all" | "active" | "disabled" | "pending" | "locked";
 type WorkspaceFilter = "all" | "office" | "fleet" | "both";
 
-const defaultAssignment = (): RoleAssignmentInput => ({
+const defaultAssignment = (workspace = "office"): RoleAssignmentInput => ({
   role_id: "",
   role: "employee",
-  workspace: "office",
+  workspace: workspace as RoleAssignmentInput["workspace"],
   vessel_id: null,
   department: null,
   is_active: true,
 });
 
-const newUserSeed = (): CreateUserPayload => ({
+const newUserSeed = (workspace = "office"): CreateUserPayload => ({
   full_name: "",
   email: "",
   role: "employee",
   temporary_password: "",
   is_active: true,
   force_password_change: true,
-  assignments: [defaultAssignment()],
+  assignments: [defaultAssignment(workspace)],
 });
 
 export default function UsersPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const workspaceScope = getWorkspaceScopeFromPathname(pathname);
+  const defaultWorkspace = getWorkspaceDefaultAssignment(workspaceScope);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,10 +86,14 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [visibleCount, setVisibleCount] = useState(25);
   const [useInfiniteScroll, setUseInfiniteScroll] = useState(true);
-  const [newUser, setNewUser] = useState<CreateUserPayload>(newUserSeed());
+  const [newUser, setNewUser] = useState<CreateUserPayload>(newUserSeed(defaultWorkspace));
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UserManagementRecord | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
+
+  useEffect(() => {
+    setNewUser(newUserSeed(defaultWorkspace));
+  }, [defaultWorkspace]);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -110,14 +122,15 @@ export default function UsersPage() {
   };
 
   const loadUsers = useCallback(async () => {
-    const response = await fetchWithSession("/api/admin/users", { method: "GET" });
+    const query = workspaceScope === "all" ? "" : `?workspace=${workspaceScope}`;
+    const response = await fetchWithSession(`/api/admin/users${query}`, { method: "GET" });
     const json = await parseResponse<UsersApiResponse>(response);
     if (!response.ok || !json.success) {
       throw new Error(json.error || "Unable to load users.");
     }
 
     setUsers(json.data || []);
-  }, [fetchWithSession]);
+  }, [fetchWithSession, workspaceScope]);
 
   const verifyAccess = useCallback(async () => {
     setLoading(true);
@@ -202,9 +215,9 @@ export default function UsersPage() {
         (workspaceFilter === "office" && workspace === "office") ||
         (workspaceFilter === "fleet" && workspace === "fleet");
 
-      return matchSearch && matchRole && matchDepartment && matchStatus && matchWorkspace;
+      return matchesUserWorkspace(user, workspaceScope) && matchSearch && matchRole && matchDepartment && matchStatus && matchWorkspace;
     });
-  }, [departmentFilter, roleFilter, search, statusFilter, users, workspaceFilter]);
+  }, [departmentFilter, roleFilter, search, statusFilter, users, workspaceFilter, workspaceScope]);
 
   const visibleUsers = useMemo(
     () => (useInfiniteScroll ? filteredUsers.slice(0, visibleCount) : filteredUsers.slice(0, pageSize)),
@@ -261,7 +274,7 @@ export default function UsersPage() {
         throw new Error(json.error || "Failed to create user.");
       }
 
-      setNewUser(newUserSeed());
+      setNewUser(newUserSeed(defaultWorkspace));
       setShowCreatePanel(false);
       await loadUsers();
       showToast("User created successfully.");
@@ -276,7 +289,7 @@ export default function UsersPage() {
     setSaving(true);
     try {
       const merged = { ...user, ...patch };
-      const assignment = merged.assignments[0] || defaultAssignment();
+      const assignment = merged.assignments[0] || defaultAssignment(defaultWorkspace);
       const payload: CreateUserPayload & { user_id: string } = {
         user_id: merged.auth_user_id,
         full_name: merged.full_name,
@@ -563,7 +576,7 @@ export default function UsersPage() {
                   role: event.target.value as CreateUserPayload["role"],
                   assignments: [
                     {
-                      ...(prev.assignments[0] || defaultAssignment()),
+                      ...(prev.assignments[0] || defaultAssignment(defaultWorkspace)),
                       role: event.target.value as RoleAssignmentInput["role"],
                     },
                   ],
@@ -585,7 +598,7 @@ export default function UsersPage() {
                   ...prev,
                   assignments: [
                     {
-                      ...(prev.assignments[0] || defaultAssignment()),
+                      ...(prev.assignments[0] || defaultAssignment(defaultWorkspace)),
                       workspace: event.target.value as RoleAssignmentInput["workspace"],
                     },
                   ],
@@ -607,7 +620,7 @@ export default function UsersPage() {
                   ...prev,
                   assignments: [
                     {
-                      ...(prev.assignments[0] || defaultAssignment()),
+                      ...(prev.assignments[0] || defaultAssignment(defaultWorkspace)),
                       department: event.target.value || null,
                     },
                   ],
@@ -625,7 +638,7 @@ export default function UsersPage() {
                   ...prev,
                   assignments: [
                     {
-                      ...(prev.assignments[0] || defaultAssignment()),
+                      ...(prev.assignments[0] || defaultAssignment(defaultWorkspace)),
                       vessel_id: event.target.value ? Number(event.target.value) : null,
                     },
                   ],
@@ -748,7 +761,7 @@ export default function UsersPage() {
                 </tr>
               ) : (
                 visibleUsers.map((user) => {
-                  const assignment = user.assignments[0] || defaultAssignment();
+                  const assignment = user.assignments[0] || defaultAssignment(defaultWorkspace);
                   const owner = isOwnerEmail(user.email);
                   return (
                     <tr key={user.auth_user_id}>

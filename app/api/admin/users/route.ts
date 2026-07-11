@@ -7,6 +7,7 @@ import type {
   UserManagementRecord,
 } from "../../../lib/user-management";
 import { isOwnerEmail } from "../../../lib/rbac";
+import { matchesUserWorkspace, type WorkspaceView } from "../../../lib/workspace";
 
 const normalizeRole = (value: string | null | undefined) =>
   (value || "employee").trim().toLowerCase();
@@ -450,6 +451,9 @@ export async function GET(request: Request) {
 
     const requestUrl = new URL(request.url);
     const requestedUserId = requestUrl.searchParams.get("userId");
+    const requestedWorkspace = requestUrl.searchParams.get("workspace");
+    const workspaceScope: WorkspaceView =
+      requestedWorkspace === "office" || requestedWorkspace === "fleet" ? requestedWorkspace : "all";
 
     const [authUsersResult, publicUsersResult, roleAssignmentsResult] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
@@ -541,8 +545,10 @@ export async function GET(request: Request) {
       };
     });
 
+    const scopedRecords = records.filter((user) => matchesUserWorkspace(user, workspaceScope));
+
     if (requestedUserId) {
-      const record = records.find((user) => user.auth_user_id === requestedUserId) || null;
+      const record = scopedRecords.find((user) => user.auth_user_id === requestedUserId) || null;
       if (!record) {
         return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
       }
@@ -566,7 +572,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, data: records });
+    return NextResponse.json({ success: true, data: scopedRecords });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Unexpected server error." },

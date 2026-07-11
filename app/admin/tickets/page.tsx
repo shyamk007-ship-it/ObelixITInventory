@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
+import { getWorkspaceScopeFromPathname } from "../../lib/workspace";
 import {
   ticketCategories,
   ticketPriorities,
@@ -52,6 +54,8 @@ interface TicketComment {
 }
 
 export default function TicketsAdminPage() {
+  const pathname = usePathname();
+  const workspaceScope = getWorkspaceScopeFromPathname(pathname);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -92,17 +96,21 @@ export default function TicketsAdminPage() {
     return () => {
       channel.unsubscribe();
     };
-  }, []);
+  }, [workspaceScope]);
 
   const loadInitialData = async () => {
     await Promise.all([loadTickets(), loadAssets(), loadEmployees(), loadStaff()]);
   };
 
   const loadTickets = async () => {
-    const { data, error } = await supabase
-      .from("tickets")
-      .select("*")
-      .order("created_at", { ascending: false });
+    let query = supabase.from("tickets").select("*").order("created_at", { ascending: false });
+    if (workspaceScope === "office") {
+      query = query.is("vessel_id", null);
+    } else if (workspaceScope === "fleet") {
+      query = query.not("vessel_id", "is", null);
+    }
+
+    const { data, error } = await query;
 
     if (!error) {
       setTickets(data || []);
@@ -110,10 +118,14 @@ export default function TicketsAdminPage() {
   };
 
   const loadAssets = async () => {
-    const { data, error } = await supabase
-      .from("assets")
-      .select("id, asset_name")
-      .order("asset_name", { ascending: true });
+    let query = supabase.from("assets").select("id, asset_name").order("asset_name", { ascending: true });
+    if (workspaceScope === "office") {
+      query = query.is("vessel_id", null);
+    } else if (workspaceScope === "fleet") {
+      query = query.not("vessel_id", "is", null);
+    }
+
+    const { data, error } = await query;
 
     if (!error) {
       setAssets(data || []);

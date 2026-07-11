@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import NotificationBell from "../shared/NotificationBell";
 import UserProfile from "../shared/UserProfile";
 import SearchBar from "../shared/SearchBar";
@@ -8,12 +8,14 @@ import SearchBar from "../shared/SearchBar";
 interface FleetHeaderProps {
   title: string;
   subtitle: string;
+  breadcrumbs?: ReactNode;
 }
 
-export default function FleetHeader({ title, subtitle }: FleetHeaderProps) {
+export default function FleetHeader({ title, subtitle, breadcrumbs }: FleetHeaderProps) {
   return (
     <header style={styles.wrap}>
       <div style={styles.left}>
+        {breadcrumbs}
         <p style={styles.eyebrow}>Fleet Workspace</p>
         <h1 style={styles.title}>{title}</h1>
         <p style={styles.subtitle}>{subtitle}</p>

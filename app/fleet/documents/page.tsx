@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 export default function FleetDocumentsPage() {
+  const pathname = usePathname();
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const isCertificatesView = pathname?.startsWith("/fleet/certificates");
 
   useEffect(() => {
     void loadDocuments();
@@ -14,7 +17,10 @@ export default function FleetDocumentsPage() {
   const loadDocuments = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("assets").select("id, asset_name, asset_tag, vessel_id, vessels(vessel_name)");
+      const { data, error } = await supabase
+        .from("assets")
+        .select("id, asset_name, asset_tag, vessel_id, vessels(vessel_name)")
+        .not("vessel_id", "is", null);
       if (!error) {
         setDocuments((data || []).map((asset: any) => ({
           id: asset.id,
@@ -35,8 +41,12 @@ export default function FleetDocumentsPage() {
       <div style={styles.headerRow}>
         <div>
           <p style={styles.eyebrow}>Fleet Operations</p>
-          <h1 style={styles.title}>Fleet Documents</h1>
-          <p style={styles.subtitle}>Reference asset records and vessel information in one place.</p>
+          <h1 style={styles.title}>{isCertificatesView ? "Fleet Certificates" : "Fleet Documents"}</h1>
+          <p style={styles.subtitle}>
+            {isCertificatesView
+              ? "Reference vessel-linked certificates and compliance records."
+              : "Reference asset records and vessel information in one place."}
+          </p>
         </div>
       </div>
 

@@ -182,16 +182,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     );
 
     if (upsertPublic.error) {
-      const fallbackPayload = isMissingAuthUserIdColumnError(upsertPublic.error.message)
-        ? {
-            email: targetEmail,
-            full_name: payload.full_name,
-            role: payload.role,
-            is_active: payload.is_active,
-            phone_number: payload.phone_number,
-            force_password_change: payload.force_password_change,
-          }
-        : { email: targetEmail, full_name: payload.full_name, role: payload.role };
+      const fallbackPayload = {
+        email: targetEmail,
+        full_name: payload.full_name,
+        role: payload.role,
+        is_active: payload.is_active,
+        phone_number: payload.phone_number,
+        force_password_change: payload.force_password_change,
+      };
 
       const fallback = await supabaseAdmin.from("users").upsert(fallbackPayload, { onConflict: "email" });
 

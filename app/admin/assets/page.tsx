@@ -1,12 +1,14 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, buildAuditDescription, createNotificationIfNotExists } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
+import { getWorkspaceScopeFromPathname } from "../../lib/workspace";
 
 interface Vessel {
   id: number;
@@ -84,6 +86,8 @@ const categoryOrder = [
 ];
 
 export default function AssetsPage() {
+  const pathname = usePathname();
+  const workspaceScope = getWorkspaceScopeFromPathname(pathname);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -108,21 +112,42 @@ export default function AssetsPage() {
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [workspaceScope]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [assetsResponse, vesselsResponse, employeesResponse, transfersResponse, lifecycleResponse] = await Promise.all([
-        supabase.from("assets").select("*, vessels(vessel_name)").order("asset_name", { ascending: true }),
+      let assetsQuery = supabase.from("assets").select("*, vessels(vessel_name)").order("asset_name", { ascending: true });
+      if (workspaceScope === "office") {
+        assetsQuery = assetsQuery.is("vessel_id", null);
+      } else if (workspaceScope === "fleet") {
+        assetsQuery = assetsQuery.not("vessel_id", "is", null);
+      }
+
+      const [assetsResponse, vesselsResponse, employeesResponse] = await Promise.all([
+        assetsQuery,
         supabase.from("vessels").select("id, vessel_name").order("vessel_name", { ascending: true }),
-        supabase.from("employees").select("id, full_name").order("full_name", { ascending: true }),
-        supabase.from("asset_transfers").select("*, assets(asset_name, asset_tag), from_vessel:vessels!asset_transfers_from_vessel_id_fkey(vessel_name), to_vessel:vessels!asset_transfers_to_vessel_id_fkey(vessel_name)").order("transferred_at", { ascending: false }),
-        supabase.from("asset_lifecycle_events").select("*").order("event_timestamp", { ascending: false }),
+        workspaceScope === "fleet"
+          ? Promise.resolve({ data: [], error: null })
+          : supabase.from("employees").select("id, full_name").order("full_name", { ascending: true }),
       ]);
 
+      const assetData = (assetsResponse.data as Asset[]) || [];
+      const assetIds = assetData.map((asset) => asset.id);
+
+      const emptyResult = { data: [], error: null };
+      const [transfersResponse, lifecycleResponse] = assetIds.length
+        ? await Promise.all([
+            supabase
+              .from("asset_transfers")
+              .select("*, assets(asset_name, asset_tag), from_vessel:vessels!asset_transfers_from_vessel_id_fkey(vessel_name), to_vessel:vessels!asset_transfers_to_vessel_id_fkey(vessel_name)")
+              .in("asset_id", assetIds)
+              .order("transferred_at", { ascending: false }),
+            supabase.from("asset_lifecycle_events").select("*").in("asset_id", assetIds).order("event_timestamp", { ascending: false }),
+          ])
+        : [emptyResult, emptyResult];
+
       if (!assetsResponse.error) {
-        const assetData = (assetsResponse.data as Asset[]) || [];
         setAssets(assetData);
         await createWarrantyNotifications(assetData);
       }

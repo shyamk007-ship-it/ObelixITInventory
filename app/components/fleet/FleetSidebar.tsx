@@ -7,18 +7,17 @@ import { useEnterpriseAccess } from "../shared/EnterpriseAccessProvider";
 import { roleLabel } from "../../lib/rbac";
 
 const links = [
-  { href: "/fleet/dashboard", label: "Fleet Dashboard" },
+  { href: "/fleet/dashboard", label: "Dashboard" },
   { href: "/fleet/vessels", label: "Vessels" },
   { href: "/fleet/assets", label: "Fleet Assets" },
-  { href: "/fleet/network", label: "Network Monitoring" },
-  { href: "/fleet/checklist", label: "IT Checklist" },
+  { href: "/fleet/crew", label: "Crew" },
+  { href: "/fleet/assignments", label: "Assignments" },
+  { href: "/fleet/tickets", label: "Tickets" },
   { href: "/fleet/maintenance", label: "Maintenance" },
-  { href: "/fleet/incidents", label: "Incidents" },
-  { href: "/fleet/crew", label: "Crew IT" },
-  { href: "/fleet/documents", label: "Documents" },
+  { href: "/fleet/certificates", label: "Certificates" },
   { href: "/fleet/reports", label: "Reports" },
+  { href: "/fleet/users", label: "Users" },
   { href: "/fleet/settings", label: "Settings" },
-  { href: "/", label: "← Back to Company Portal" },
 ];
 
 export default function FleetSidebar() {
@@ -53,6 +52,10 @@ export default function FleetSidebar() {
           );
         })}
       </nav>
+
+      <Link href="/" style={styles.portalLink}>
+        Back to Company Portal
+      </Link>
     </aside>
   );
 }
@@ -101,6 +104,14 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     scrollbarWidth: "thin",
     scrollbarColor: "#475569 transparent",
+  },
+  portalLink: {
+    flexShrink: 0,
+    marginTop: 12,
+    color: "#cbd5e1",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 700,
   },
   link: {
     color: "white",

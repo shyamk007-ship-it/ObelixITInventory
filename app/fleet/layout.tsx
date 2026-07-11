@@ -5,9 +5,65 @@ import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import FleetSidebar from "../components/fleet/FleetSidebar";
 import FleetHeader from "../components/fleet/FleetHeader";
+import WorkspaceBreadcrumbs from "../components/shared/WorkspaceBreadcrumbs";
 import { buildAuditDescription, createAuditLog } from "../lib/audit";
 import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
 import { canAccessWorkspaceAssignments } from "../lib/rbac";
+
+const routeMeta: Record<string, { title: string; subtitle: string }> = {
+  dashboard: {
+    title: "Fleet Dashboard",
+    subtitle: "Monitor vessels, fleet assets, maintenance, certificates, and support activity.",
+  },
+  vessels: {
+    title: "Vessels",
+    subtitle: "Open vessel workspaces and review fleet-level vessel health.",
+  },
+  assets: {
+    title: "Fleet Assets",
+    subtitle: "Review vessel-linked assets across the fleet workspace.",
+  },
+  crew: {
+    title: "Crew",
+    subtitle: "Track fleet crew records and vessel assignments.",
+  },
+  assignments: {
+    title: "Assignments",
+    subtitle: "Manage fleet asset assignment workflows and return status.",
+  },
+  tickets: {
+    title: "Fleet Tickets",
+    subtitle: "Track vessel incidents, open fleet tickets, and response workload.",
+  },
+  maintenance: {
+    title: "Maintenance",
+    subtitle: "Review pending maintenance work across the fleet.",
+  },
+  certificates: {
+    title: "Certificates",
+    subtitle: "Reference fleet certificates and vessel-linked records.",
+  },
+  reports: {
+    title: "Fleet Reports",
+    subtitle: "Operational reporting for vessels, assets, maintenance, and incidents.",
+  },
+  users: {
+    title: "Fleet Users",
+    subtitle: "Administer fleet and shared user accounts.",
+  },
+  settings: {
+    title: "Fleet Settings",
+    subtitle: "Configure fleet workspace preferences and defaults.",
+  },
+  incidents: {
+    title: "Fleet Tickets",
+    subtitle: "Track vessel incidents, open fleet tickets, and response workload.",
+  },
+  documents: {
+    title: "Certificates",
+    subtitle: "Reference fleet certificates and vessel-linked records.",
+  },
+};
 
 export default function FleetLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -18,6 +74,12 @@ export default function FleetLayout({ children }: { children: React.ReactNode })
   const isVesselWorkspace = useMemo(() => {
     if (!pathname) return false;
     return /^\/fleet\/vessels\/[^/]+(\/|$)/.test(pathname);
+  }, [pathname]);
+
+  const headerMeta = useMemo(() => {
+    const segments = (pathname || "/fleet/dashboard").split("/").filter(Boolean);
+    const section = segments[1] || "dashboard";
+    return routeMeta[section] || routeMeta.dashboard;
   }, [pathname]);
 
   useEffect(() => {
@@ -75,8 +137,9 @@ export default function FleetLayout({ children }: { children: React.ReactNode })
       <FleetSidebar />
       <main style={styles.main}>
         <FleetHeader
-          title="Fleet Dashboard"
-          subtitle="Monitor vessels, fleet assets, incidents, maintenance, and maritime IT operations."
+          title={headerMeta.title}
+          subtitle={headerMeta.subtitle}
+          breadcrumbs={<WorkspaceBreadcrumbs />}
         />
         {children}
       </main>
