@@ -199,7 +199,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
   const userRecord = await supabase
     .from("users")
     .select("id")
-    .eq("auth_user_id", user.id)
+    .ilike("email", user.email || "")
     .maybeSingle();
 
   if (userRecord.error || userRecord.data?.id === null || userRecord.data?.id === undefined) {

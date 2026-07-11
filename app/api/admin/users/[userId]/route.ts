@@ -17,6 +17,9 @@ const toCanonicalRoleKey = (value: string | null | undefined) => {
   return roleKey;
 };
 
+const isMissingAuthUserIdColumnError = (message: string) =>
+  /auth_user_id/i.test(message) && /does not exist/i.test(message);
+
 const DEFAULT_ROLE_NAMES = [
   "super_admin",
   "office_admin",
@@ -68,26 +71,12 @@ const getRoleIdMap = async () => {
   return roleMap;
 };
 
-const resolvePublicUserId = async (authUserId: string, email: string) => {
+const resolvePublicUserId = async (_authUserId: string, email: string) => {
   const supabaseAdmin = getSupabaseAdmin();
-
-  const authMatch = await supabaseAdmin
-    .from("users")
-    .select("id, auth_user_id")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
-
-  if (authMatch.error) {
-    throw new Error(authMatch.error.message);
-  }
-
-  if (authMatch.data?.id !== null && authMatch.data?.id !== undefined) {
-    return String(authMatch.data.id);
-  }
 
   const emailMatch = await supabaseAdmin
     .from("users")
-    .select("id, auth_user_id")
+    .select("id")
     .ilike("email", email)
     .maybeSingle();
 
@@ -97,17 +86,6 @@ const resolvePublicUserId = async (authUserId: string, email: string) => {
 
   if (emailMatch.data?.id === null || emailMatch.data?.id === undefined) {
     throw new Error("Public user record not found.");
-  }
-
-  if (String(emailMatch.data.auth_user_id || "").trim() !== authUserId) {
-    const relink = await supabaseAdmin
-      .from("users")
-      .update({ auth_user_id: authUserId })
-      .eq("id", emailMatch.data.id);
-
-    if (relink.error) {
-      throw new Error(relink.error.message);
-    }
   }
 
   return String(emailMatch.data.id);
@@ -204,9 +182,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     );
 
     if (upsertPublic.error) {
-      const fallback = await supabaseAdmin
-        .from("users")
-        .upsert({ email: targetEmail, full_name: payload.full_name, role: payload.role }, { onConflict: "email" });
+      const fallbackPayload = isMissingAuthUserIdColumnError(upsertPublic.error.message)
+        ? {
+            email: targetEmail,
+            full_name: payload.full_name,
+            role: payload.role,
+            is_active: payload.is_active,
+            phone_number: payload.phone_number,
+            force_password_change: payload.force_password_change,
+          }
+        : { email: targetEmail, full_name: payload.full_name, role: payload.role };
+
+      const fallback = await supabaseAdmin.from("users").upsert(fallbackPayload, { onConflict: "email" });
 
       if (fallback.error) {
         return NextResponse.json({ success: false, error: fallback.error.message }, { status: 500 });

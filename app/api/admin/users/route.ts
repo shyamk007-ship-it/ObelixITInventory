@@ -69,6 +69,9 @@ const extractRoleLookup = (value: unknown) => {
   return { id, role_name };
 };
 
+const isMissingAuthUserIdColumnError = (message: string) =>
+  /auth_user_id/i.test(message) && /does not exist/i.test(message);
+
 const getRoleIdMap = async () => {
   const supabaseAdmin = getSupabaseAdmin();
   const { data: existingRoles, error } = await supabaseAdmin.from("roles").select("id, role_name");
@@ -128,26 +131,12 @@ const mapAssignments = (records: Array<Record<string, unknown>>): RoleAssignment
     };
   });
 
-const resolvePublicUserId = async (authUserId: string, email: string) => {
+const resolvePublicUserId = async (_authUserId: string, email: string) => {
   const supabaseAdmin = getSupabaseAdmin();
-
-  const authMatch = await supabaseAdmin
-    .from("users")
-    .select("id, auth_user_id")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
-
-  if (authMatch.error) {
-    throw new Error(authMatch.error.message);
-  }
-
-  if (authMatch.data?.id !== null && authMatch.data?.id !== undefined) {
-    return String(authMatch.data.id);
-  }
 
   const emailMatch = await supabaseAdmin
     .from("users")
-    .select("id, auth_user_id")
+    .select("id")
     .ilike("email", email)
     .maybeSingle();
 
@@ -157,17 +146,6 @@ const resolvePublicUserId = async (authUserId: string, email: string) => {
 
   if (emailMatch.data?.id === null || emailMatch.data?.id === undefined) {
     throw new Error("Public user record not found.");
-  }
-
-  if (String(emailMatch.data.auth_user_id || "").trim() !== authUserId) {
-    const relink = await supabaseAdmin
-      .from("users")
-      .update({ auth_user_id: authUserId })
-      .eq("id", emailMatch.data.id);
-
-    if (relink.error) {
-      throw new Error(relink.error.message);
-    }
   }
 
   return String(emailMatch.data.id);
@@ -234,6 +212,24 @@ const ensurePublicUser = async (
     return resolvePublicUserId(userId, email);
   }
 
+  if (isMissingAuthUserIdColumnError(error.message)) {
+    const noAuthUserIdPayload = {
+      email,
+      full_name: fullName,
+      role,
+      is_active: isActive,
+      phone_number: phoneNumber,
+      profile_photo_url: profilePhotoUrl,
+      force_password_change: forcePasswordChange,
+    };
+    const retry = await supabaseAdmin.from("users").upsert(noAuthUserIdPayload, { onConflict: "email" });
+    if (retry.error) {
+      throw new Error(retry.error.message);
+    }
+
+    return resolvePublicUserId(userId, email);
+  }
+
   const fallback = {
     email,
     full_name: fullName,
@@ -297,7 +293,25 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
   );
 
   if (upsertPublic.error) {
-    return { success: false as const, status: 500, error: upsertPublic.error.message };
+    if (!isMissingAuthUserIdColumnError(upsertPublic.error.message)) {
+      return { success: false as const, status: 500, error: upsertPublic.error.message };
+    }
+
+    const fallbackUpsert = await supabaseAdmin.from("users").upsert(
+      {
+        email: targetEmail,
+        full_name: payload.full_name,
+        role: payload.role,
+        is_active: payload.is_active,
+        phone_number: null,
+        force_password_change: payload.force_password_change,
+      },
+      { onConflict: "email" }
+    );
+
+    if (fallbackUpsert.error) {
+      return { success: false as const, status: 500, error: fallbackUpsert.error.message };
+    }
   }
 
   let publicUserId: string;
@@ -441,7 +455,7 @@ export async function GET(request: Request) {
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       supabaseAdmin
         .from("users")
-        .select("id, auth_user_id, full_name, email, role, is_active, phone_number, profile_photo_url, force_password_change, created_at")
+        .select("id, full_name, email, role, is_active, phone_number, profile_photo_url, force_password_change, created_at")
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("user_roles")

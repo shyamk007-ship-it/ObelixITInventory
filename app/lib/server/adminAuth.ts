@@ -56,7 +56,7 @@ export async function requireAdminAccessFromRequest(request: Request) {
   const publicUser = await supabaseAdmin
     .from("users")
     .select("id, email, role")
-    .eq("auth_user_id", user.id)
+    .ilike("email", user.email)
     .maybeSingle();
 
   if (publicUser.error) {
