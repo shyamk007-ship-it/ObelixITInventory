@@ -55,7 +55,7 @@ export async function requireAdminAccessFromRequest(request: Request) {
 
   const { data: assignments } = await supabaseAdmin
     .from("user_roles")
-    .select("role_id, roles:role_id(role_name)")
+    .select("role_id, roles:role_id(id, role_name)")
     .eq("user_id", user.id)
     .eq("is_active", true);
 

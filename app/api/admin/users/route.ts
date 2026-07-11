@@ -30,6 +30,25 @@ const extractRoleName = (value: unknown): string | null => {
   return null;
 };
 
+const extractRoleLookup = (value: unknown) => {
+  if (!value) return undefined;
+
+  const record = Array.isArray(value) ? value[0] : value;
+  if (typeof record !== "object" || record === null) {
+    return undefined;
+  }
+
+  const roleRecord = record as { id?: unknown; role_name?: unknown };
+  const id = String(roleRecord.id || "").trim();
+  const role_name = String(roleRecord.role_name || "").trim();
+
+  if (!id || !role_name) {
+    return undefined;
+  }
+
+  return { id, role_name };
+};
+
 const getRoleIdMap = async () => {
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin.from("roles").select("id, role_name");
@@ -38,11 +57,11 @@ const getRoleIdMap = async () => {
     throw new Error(error.message);
   }
 
-  const roleMap = new Map<string, number>();
+  const roleMap = new Map<string, string>();
   (data || []).forEach((record) => {
     const key = normalizeRoleKey(String(record.role_name || ""));
-    const id = Number(record.id);
-    if (key && Number.isFinite(id)) {
+    const id = String(record.id || "").trim();
+    if (key && id) {
       roleMap.set(key, id);
     }
   });
@@ -51,20 +70,22 @@ const getRoleIdMap = async () => {
 };
 
 const mapAssignments = (records: Array<Record<string, unknown>>): RoleAssignmentInput[] =>
-  records.map((record) => ({
-    role_id:
-      record.role_id === null || record.role_id === undefined || record.role_id === ""
-        ? null
-        : Number(record.role_id),
-    role: normalizeRole(extractRoleName(record.roles) || "employee") as RoleAssignmentInput["role"],
-    workspace: String(record.workspace || "company").toLowerCase() as RoleAssignmentInput["workspace"],
-    vessel_id:
-      record.vessel_id === null || record.vessel_id === undefined || record.vessel_id === ""
-        ? null
-        : Number(record.vessel_id),
-    department: record.department ? String(record.department) : null,
-    is_active: Boolean(record.is_active),
-  }));
+  records.map((record) => {
+    const roles = extractRoleLookup(record.roles);
+
+    return {
+      role_id: String(record.role_id || ""),
+      role: normalizeRole(extractRoleName(record.roles) || "employee") as RoleAssignmentInput["role"],
+      roles,
+      workspace: String(record.workspace || "company").toLowerCase() as RoleAssignmentInput["workspace"],
+      vessel_id:
+        record.vessel_id === null || record.vessel_id === undefined || record.vessel_id === ""
+          ? null
+          : Number(record.vessel_id),
+      department: record.department ? String(record.department) : null,
+      is_active: Boolean(record.is_active),
+    };
+  });
 
 const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssignmentInput[]) => {
   const supabaseAdmin = getSupabaseAdmin();
@@ -324,7 +345,7 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("user_roles")
-        .select("user_id, role_id, workspace, vessel_id, department, is_active, roles:role_id(role_name)")
+        .select("user_id, role_id, workspace, vessel_id, department, is_active, roles:role_id(id, role_name)")
         .order("created_at", { ascending: true }),
     ]);
 
@@ -362,7 +383,7 @@ export async function GET(request: Request) {
           ? mapAssignments(authAssignments)
           : [
               {
-                role_id: null,
+                role_id: "",
                 role: fallbackRole as RoleAssignmentInput["role"],
                 workspace:
                   fallbackRole === "fleet_admin"

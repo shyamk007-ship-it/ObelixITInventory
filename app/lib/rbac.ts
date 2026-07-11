@@ -19,8 +19,12 @@ export type WorkspaceScope = "company" | "office" | "fleet" | "vessel";
 export interface UserRoleAssignment {
   id: number;
   user_id: string;
-  role_id: number | null;
+  role_id: string;
   role: Role;
+  roles?: {
+    id: string;
+    role_name: string;
+  };
   workspace: WorkspaceScope;
   vessel_id: number | null;
   department: string | null;
@@ -122,6 +126,25 @@ const toNumberOrNull = (value: unknown) => {
   return Number.isNaN(numeric) ? null : numeric;
 };
 
+const extractRoleLookup = (value: unknown) => {
+  if (!value) return undefined;
+
+  const record = Array.isArray(value) ? value[0] : value;
+  if (typeof record !== "object" || record === null) {
+    return undefined;
+  }
+
+  const roleRecord = record as { id?: unknown; role_name?: unknown };
+  const id = String(roleRecord.id || "").trim();
+  const role_name = String(roleRecord.role_name || "").trim();
+
+  if (!id || !role_name) {
+    return undefined;
+  }
+
+  return { id, role_name };
+};
+
 const getLegacyWorkspaceForProfile = (role: Role): WorkspaceScope => {
   if (role === "super_admin") return "company";
   if (role === "office_admin" || role === "admin" || role === "it_staff") return "office";
@@ -137,7 +160,7 @@ const buildVirtualAssignment = (profile: UserProfile): UserRoleAssignment | null
   return {
     id: Number(profile.id || 0),
     user_id: String(profile.id || 0),
-    role_id: null,
+    role_id: "",
     role: normalizeRole(profile.role),
     workspace,
     vessel_id: null,
@@ -163,7 +186,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
       {
         id: 1,
         user_id: user.id,
-        role_id: null,
+        role_id: "",
         role: "super_admin",
         workspace: "company",
         vessel_id: null,
@@ -177,7 +200,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
 
   const { data, error } = await supabase
     .from("user_roles")
-    .select("id, user_id, role_id, workspace, vessel_id, department, is_active, created_at, updated_at, roles:role_id(role_name)")
+    .select("id, user_id, role_id, workspace, vessel_id, department, is_active, created_at, updated_at, roles:role_id(id, role_name)")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
@@ -186,22 +209,23 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
     return [];
   }
 
-  return data.map((record) => ({
-    id: Number(record.id),
-    user_id: String(record.user_id),
-    role_id: toNumberOrNull(record.role_id),
-    role: normalizeRole(
-      typeof record.roles === "object" && record.roles !== null && "role_name" in record.roles
-        ? String((record.roles as { role_name?: string | null }).role_name || "")
-        : ""
-    ),
-    workspace: String(record.workspace || "company").toLowerCase() as WorkspaceScope,
-    vessel_id: toNumberOrNull(record.vessel_id),
-    department: record.department ? String(record.department) : null,
-    is_active: Boolean(record.is_active),
-    created_at: record.created_at ?? null,
-    updated_at: record.updated_at ?? null,
-  }));
+  return data.map((record) => {
+    const roles = extractRoleLookup(record.roles);
+
+    return {
+      id: Number(record.id),
+      user_id: String(record.user_id),
+      role_id: String(record.role_id || ""),
+      role: normalizeRole(roles?.role_name || ""),
+      roles,
+      workspace: String(record.workspace || "company").toLowerCase() as WorkspaceScope,
+      vessel_id: toNumberOrNull(record.vessel_id),
+      department: record.department ? String(record.department) : null,
+      is_active: Boolean(record.is_active),
+      created_at: record.created_at ?? null,
+      updated_at: record.updated_at ?? null,
+    };
+  });
 }
 
 export async function getRoleAssignmentsWithFallback(profile: UserProfile): Promise<UserRoleAssignment[]> {

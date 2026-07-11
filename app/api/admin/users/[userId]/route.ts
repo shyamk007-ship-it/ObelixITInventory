@@ -15,11 +15,11 @@ const getRoleIdMap = async () => {
     throw new Error(error.message);
   }
 
-  const roleMap = new Map<string, number>();
+  const roleMap = new Map<string, string>();
   (data || []).forEach((record) => {
     const key = normalizeRoleKey(String(record.role_name || ""));
-    const id = Number(record.id);
-    if (key && Number.isFinite(id)) {
+    const id = String(record.id || "").trim();
+    if (key && id) {
       roleMap.set(key, id);
     }
   });

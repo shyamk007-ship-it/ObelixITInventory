@@ -46,6 +46,7 @@ type StatusFilter = "all" | "active" | "disabled" | "pending" | "locked";
 type WorkspaceFilter = "all" | "office" | "fleet" | "both";
 
 const defaultAssignment = (): RoleAssignmentInput => ({
+  role_id: "",
   role: "employee",
   workspace: "office",
   vessel_id: null,
@@ -401,6 +402,7 @@ export default function UsersPage() {
 
         const workspaceRaw = workspaceIndex >= 0 ? String(columns[workspaceIndex] || "office").trim() : "office";
         const assignment: RoleAssignmentInput = {
+          role_id: "",
           role,
           workspace: (workspaceRaw || "office") as RoleAssignmentInput["workspace"],
           department: departmentIndex >= 0 ? String(columns[departmentIndex] || "").trim() || null : null,
@@ -556,7 +558,16 @@ export default function UsersPage() {
             <select
               value={newUser.role}
               onChange={(event) =>
-                setNewUser((prev) => ({ ...prev, role: event.target.value as CreateUserPayload["role"] }))
+                setNewUser((prev) => ({
+                  ...prev,
+                  role: event.target.value as CreateUserPayload["role"],
+                  assignments: [
+                    {
+                      ...(prev.assignments[0] || defaultAssignment()),
+                      role: event.target.value as RoleAssignmentInput["role"],
+                    },
+                  ],
+                }))
               }
               style={styles.input}
             >
