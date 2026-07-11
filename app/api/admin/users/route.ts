@@ -11,9 +11,52 @@ import { isOwnerEmail } from "../../../lib/rbac";
 const normalizeRole = (value: string | null | undefined) =>
   (value || "employee").trim().toLowerCase();
 
+const normalizeRoleKey = (value: string | null | undefined) =>
+  (value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+const extractRoleName = (value: unknown): string | null => {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    const first = value[0] as { role_name?: string | null } | undefined;
+    return first?.role_name ? String(first.role_name) : null;
+  }
+
+  if (typeof value === "object" && value !== null && "role_name" in value) {
+    const roleName = (value as { role_name?: string | null }).role_name;
+    return roleName ? String(roleName) : null;
+  }
+
+  return null;
+};
+
+const getRoleIdMap = async () => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin.from("roles").select("id, role_name");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const roleMap = new Map<string, number>();
+  (data || []).forEach((record) => {
+    const key = normalizeRoleKey(String(record.role_name || ""));
+    const id = Number(record.id);
+    if (key && Number.isFinite(id)) {
+      roleMap.set(key, id);
+    }
+  });
+
+  return roleMap;
+};
+
 const mapAssignments = (records: Array<Record<string, unknown>>): RoleAssignmentInput[] =>
   records.map((record) => ({
-    role: normalizeRole(String(record.role || "employee")) as RoleAssignmentInput["role"],
+    role_id:
+      record.role_id === null || record.role_id === undefined || record.role_id === ""
+        ? null
+        : Number(record.role_id),
+    role: normalizeRole(extractRoleName(record.roles) || "employee") as RoleAssignmentInput["role"],
     workspace: String(record.workspace || "company").toLowerCase() as RoleAssignmentInput["workspace"],
     vessel_id:
       record.vessel_id === null || record.vessel_id === undefined || record.vessel_id === ""
@@ -31,14 +74,25 @@ const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssign
     return;
   }
 
-  const rows = assignments.map((assignment) => ({
+  const roleIdMap = await getRoleIdMap();
+
+  const rows = assignments.map((assignment) => {
+    const roleKey = normalizeRoleKey(assignment.role);
+    const roleId = roleIdMap.get(roleKey);
+
+    if (!roleId) {
+      throw new Error(`Unknown role '${assignment.role}'. Ensure roles table is seeded.`);
+    }
+
+    return {
     user_id: userId,
-    role: assignment.role,
+    role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
     department: assignment.department,
     is_active: assignment.is_active,
-  }));
+  };
+  });
 
   const { error } = await supabaseAdmin.from("user_roles").insert(rows);
   if (error) {
@@ -270,7 +324,7 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("user_roles")
-        .select("user_id, role, workspace, vessel_id, department, is_active")
+        .select("user_id, role_id, workspace, vessel_id, department, is_active, roles:role_id(role_name)")
         .order("created_at", { ascending: true }),
     ]);
 
@@ -287,33 +341,43 @@ export async function GET(request: Request) {
     });
 
     const assignmentsByUserId = new Map<string, Array<Record<string, unknown>>>();
-    (roleAssignmentsResult.data || []).forEach((row) => {
+    const assignmentRows = (roleAssignmentsResult.data || []) as Array<Record<string, unknown>>;
+    assignmentRows.forEach((row) => {
       const userId = String(row.user_id || "");
       if (!assignmentsByUserId.has(userId)) {
         assignmentsByUserId.set(userId, []);
       }
-      assignmentsByUserId.get(userId)?.push(row as Record<string, unknown>);
+      assignmentsByUserId.get(userId)?.push(row);
     });
 
     const records: UserManagementRecord[] = (authUsersResult.data?.users || []).map((authUser) => {
       const email = (authUser.email || "").trim().toLowerCase();
       const publicRow = publicByEmail.get(email);
-      const role = normalizeRole(String(publicRow?.role || authUser.user_metadata?.role || "employee"));
       const metadata = authUser.user_metadata || {};
       const authAssignments = assignmentsByUserId.get(authUser.id) || [];
+      const fallbackRole = normalizeRole(String(publicRow?.role || authUser.user_metadata?.role || "employee"));
 
       const assignmentSeed: RoleAssignmentInput[] =
         authAssignments.length > 0
           ? mapAssignments(authAssignments)
           : [
               {
-                role: role as RoleAssignmentInput["role"],
-                workspace: role === "fleet_admin" ? "fleet" : role === "super_admin" ? "company" : "office",
+                role_id: null,
+                role: fallbackRole as RoleAssignmentInput["role"],
+                workspace:
+                  fallbackRole === "fleet_admin"
+                    ? "fleet"
+                    : fallbackRole === "super_admin"
+                      ? "company"
+                      : "office",
                 vessel_id: null,
                 department: null,
                 is_active: true,
               },
             ];
+
+      const primaryAssignment = assignmentSeed[0] || null;
+      const role = normalizeRole(primaryAssignment?.role || fallbackRole);
 
       const isActive = isOwnerEmail(email)
         ? true

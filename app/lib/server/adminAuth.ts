@@ -9,6 +9,22 @@ const MANAGE_USER_ROLES = new Set(["super_admin", "admin", "office_admin"]);
 const normalizeRole = (value: string | null | undefined) =>
   (value || "").trim().toLowerCase();
 
+const extractRoleName = (value: unknown): string | null => {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    const first = value[0] as { role_name?: string | null } | undefined;
+    return first?.role_name ? String(first.role_name) : null;
+  }
+
+  if (typeof value === "object" && value !== null && "role_name" in value) {
+    const roleName = (value as { role_name?: string | null }).role_name;
+    return roleName ? String(roleName) : null;
+  }
+
+  return null;
+};
+
 export async function requireAdminAccessFromRequest(request: Request) {
   const supabaseAdmin = getSupabaseAdmin();
   const authorizationHeader = request.headers.get("authorization") || "";
@@ -39,17 +55,12 @@ export async function requireAdminAccessFromRequest(request: Request) {
 
   const { data: assignments } = await supabaseAdmin
     .from("user_roles")
-    .select("role")
+    .select("role_id, roles:role_id(role_name)")
     .eq("user_id", user.id)
     .eq("is_active", true);
 
   const canManageFromAssignments = (assignments || []).some((assignment) => {
-    const role =
-      typeof assignment.role === "string"
-        ? assignment.role
-        : assignment.role === null || assignment.role === undefined
-          ? null
-          : String(assignment.role);
+    const role = extractRoleName((assignment as { roles?: unknown }).roles);
     return MANAGE_USER_ROLES.has(normalizeRole(role));
   });
 
@@ -59,7 +70,7 @@ export async function requireAdminAccessFromRequest(request: Request) {
 
   const { data: userRecord } = await supabaseAdmin
     .from("users")
-    .select("role")
+    .select("email, role")
     .ilike("email", user.email)
     .maybeSingle();
 

@@ -4,6 +4,29 @@ import { getSupabaseAdmin } from "../../../../lib/server/supabaseAdmin";
 import type { RoleAssignmentInput, UpdateUserPayload } from "../../../../lib/user-management";
 import { isOwnerEmail } from "../../../../lib/rbac";
 
+const normalizeRoleKey = (value: string | null | undefined) =>
+  (value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+const getRoleIdMap = async () => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin.from("roles").select("id, role_name");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const roleMap = new Map<string, number>();
+  (data || []).forEach((record) => {
+    const key = normalizeRoleKey(String(record.role_name || ""));
+    const id = Number(record.id);
+    if (key && Number.isFinite(id)) {
+      roleMap.set(key, id);
+    }
+  });
+
+  return roleMap;
+};
+
 const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssignmentInput[]) => {
   const supabaseAdmin = getSupabaseAdmin();
   await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
@@ -12,14 +35,25 @@ const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssign
     return;
   }
 
-  const rows = assignments.map((assignment) => ({
+  const roleIdMap = await getRoleIdMap();
+
+  const rows = assignments.map((assignment) => {
+    const roleKey = normalizeRoleKey(assignment.role);
+    const roleId = roleIdMap.get(roleKey);
+
+    if (!roleId) {
+      throw new Error(`Unknown role '${assignment.role}'. Ensure roles table is seeded.`);
+    }
+
+    return {
     user_id: userId,
-    role: assignment.role,
+    role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
     department: assignment.department,
     is_active: assignment.is_active,
-  }));
+  };
+  });
 
   const { error } = await supabaseAdmin.from("user_roles").insert(rows);
   if (error) {

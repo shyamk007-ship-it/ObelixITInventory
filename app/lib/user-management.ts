@@ -14,6 +14,7 @@ export type ManagedRole =
 export type ManagedWorkspace = "company" | "office" | "fleet" | "vessel";
 
 export interface RoleAssignmentInput {
+  role_id?: number | null;
   role: ManagedRole;
   workspace: ManagedWorkspace;
   vessel_id: number | null;

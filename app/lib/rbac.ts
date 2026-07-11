@@ -19,6 +19,7 @@ export type WorkspaceScope = "company" | "office" | "fleet" | "vessel";
 export interface UserRoleAssignment {
   id: number;
   user_id: string;
+  role_id: number | null;
   role: Role;
   workspace: WorkspaceScope;
   vessel_id: number | null;
@@ -136,6 +137,7 @@ const buildVirtualAssignment = (profile: UserProfile): UserRoleAssignment | null
   return {
     id: Number(profile.id || 0),
     user_id: String(profile.id || 0),
+    role_id: null,
     role: normalizeRole(profile.role),
     workspace,
     vessel_id: null,
@@ -161,6 +163,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
       {
         id: 1,
         user_id: user.id,
+        role_id: null,
         role: "super_admin",
         workspace: "company",
         vessel_id: null,
@@ -174,7 +177,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
 
   const { data, error } = await supabase
     .from("user_roles")
-    .select("id, user_id, role, workspace, vessel_id, department, is_active, created_at, updated_at")
+    .select("id, user_id, role_id, workspace, vessel_id, department, is_active, created_at, updated_at, roles:role_id(role_name)")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
@@ -186,7 +189,12 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
   return data.map((record) => ({
     id: Number(record.id),
     user_id: String(record.user_id),
-    role: normalizeRole(String(record.role)),
+    role_id: toNumberOrNull(record.role_id),
+    role: normalizeRole(
+      typeof record.roles === "object" && record.roles !== null && "role_name" in record.roles
+        ? String((record.roles as { role_name?: string | null }).role_name || "")
+        : ""
+    ),
     workspace: String(record.workspace || "company").toLowerCase() as WorkspaceScope,
     vessel_id: toNumberOrNull(record.vessel_id),
     department: record.department ? String(record.department) : null,
