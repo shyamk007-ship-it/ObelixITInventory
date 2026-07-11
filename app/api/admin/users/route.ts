@@ -128,9 +128,54 @@ const mapAssignments = (records: Array<Record<string, unknown>>): RoleAssignment
     };
   });
 
-const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssignmentInput[]) => {
+const resolvePublicUserId = async (authUserId: string, email: string) => {
   const supabaseAdmin = getSupabaseAdmin();
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+
+  const authMatch = await supabaseAdmin
+    .from("users")
+    .select("id, auth_user_id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (authMatch.error) {
+    throw new Error(authMatch.error.message);
+  }
+
+  if (authMatch.data?.id !== null && authMatch.data?.id !== undefined) {
+    return String(authMatch.data.id);
+  }
+
+  const emailMatch = await supabaseAdmin
+    .from("users")
+    .select("id, auth_user_id")
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (emailMatch.error) {
+    throw new Error(emailMatch.error.message);
+  }
+
+  if (emailMatch.data?.id === null || emailMatch.data?.id === undefined) {
+    throw new Error("Public user record not found.");
+  }
+
+  if (String(emailMatch.data.auth_user_id || "").trim() !== authUserId) {
+    const relink = await supabaseAdmin
+      .from("users")
+      .update({ auth_user_id: authUserId })
+      .eq("id", emailMatch.data.id);
+
+    if (relink.error) {
+      throw new Error(relink.error.message);
+    }
+  }
+
+  return String(emailMatch.data.id);
+};
+
+const upsertUserRoleAssignments = async (publicUserId: string, assignments: RoleAssignmentInput[]) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
 
   if (assignments.length === 0) {
     return;
@@ -147,7 +192,7 @@ const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssign
     }
 
     return {
-    user_id: userId,
+    user_id: publicUserId,
     role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
@@ -186,7 +231,7 @@ const ensurePublicUser = async (
 
   const { error } = await supabaseAdmin.from("users").upsert(payload, { onConflict: "email" });
   if (!error) {
-    return;
+    return resolvePublicUserId(userId, email);
   }
 
   const fallback = {
@@ -199,6 +244,8 @@ const ensurePublicUser = async (
   if (fallbackUpsert.error) {
     throw new Error(fallbackUpsert.error.message);
   }
+
+  return resolvePublicUserId(userId, email);
 };
 
 const resolveEmail = async (userId: string): Promise<string | null> => {
@@ -253,8 +300,20 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
     return { success: false as const, status: 500, error: upsertPublic.error.message };
   }
 
+  let publicUserId: string;
+
   try {
-    await upsertUserRoleAssignments(userId, payload.assignments || []);
+    publicUserId = await resolvePublicUserId(userId, targetEmail);
+  } catch (error) {
+    return {
+      success: false as const,
+      status: 500,
+      error: error instanceof Error ? error.message : "Failed to resolve public user record.",
+    };
+  }
+
+  try {
+    await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
   } catch (error) {
     return {
       success: false as const,
@@ -338,7 +397,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await ensurePublicUser(
+      const publicUserId = await ensurePublicUser(
         createResult.data.user.id,
         email,
         payload.full_name,
@@ -349,7 +408,7 @@ export async function POST(request: Request) {
         payload.force_password_change
       );
 
-      await upsertUserRoleAssignments(createResult.data.user.id, payload.assignments || []);
+      await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
     } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(createResult.data.user.id);
       return NextResponse.json(
@@ -382,7 +441,7 @@ export async function GET(request: Request) {
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       supabaseAdmin
         .from("users")
-        .select("auth_user_id, full_name, email, role, is_active, phone_number, profile_photo_url, force_password_change, created_at")
+        .select("id, auth_user_id, full_name, email, role, is_active, phone_number, profile_photo_url, force_password_change, created_at")
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("user_roles")
@@ -416,7 +475,13 @@ export async function GET(request: Request) {
       const email = (authUser.email || "").trim().toLowerCase();
       const publicRow = publicByEmail.get(email);
       const metadata = authUser.user_metadata || {};
-      const authAssignments = assignmentsByUserId.get(authUser.id) || [];
+      const publicUserId = publicRow?.id === null || publicRow?.id === undefined ? "" : String(publicRow.id);
+      const publicAuthUserId = String(publicRow?.auth_user_id || "").trim();
+      const authAssignments = [
+        ...(publicUserId ? assignmentsByUserId.get(publicUserId) || [] : []),
+        ...(publicAuthUserId ? assignmentsByUserId.get(publicAuthUserId) || [] : []),
+        ...(assignmentsByUserId.get(authUser.id) || []),
+      ];
       const fallbackRole = normalizeRole(String(publicRow?.role || authUser.user_metadata?.role || "employee"));
 
       const assignmentSeed: RoleAssignmentInput[] =

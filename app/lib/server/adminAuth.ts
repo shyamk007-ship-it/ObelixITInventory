@@ -53,10 +53,23 @@ export async function requireAdminAccessFromRequest(request: Request) {
     return { ok: true as const, user };
   }
 
+  const publicUser = await supabaseAdmin
+    .from("users")
+    .select("id, email, role")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+
+  if (publicUser.error) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ success: false, error: publicUser.error.message }, { status: 500 }),
+    };
+  }
+
   const { data: assignments } = await supabaseAdmin
     .from("user_roles")
     .select("role_id, roles:role_id(id, role_name)")
-    .eq("user_id", user.id)
+    .eq("user_id", String(publicUser.data?.id || ""))
     .eq("is_active", true);
 
   const canManageFromAssignments = (assignments || []).some((assignment) => {
@@ -68,11 +81,15 @@ export async function requireAdminAccessFromRequest(request: Request) {
     return { ok: true as const, user };
   }
 
-  const { data: userRecord } = await supabaseAdmin
-    .from("users")
-    .select("email, role")
-    .ilike("email", user.email)
-    .maybeSingle();
+  const userRecord = publicUser.data
+    ? { email: publicUser.data.email, role: publicUser.data.role }
+    : (
+        await supabaseAdmin
+          .from("users")
+          .select("email, role")
+          .ilike("email", user.email)
+          .maybeSingle()
+      ).data;
 
   const fallbackRole =
     typeof userRecord?.role === "string"

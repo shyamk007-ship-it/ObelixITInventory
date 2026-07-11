@@ -68,9 +68,54 @@ const getRoleIdMap = async () => {
   return roleMap;
 };
 
-const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssignmentInput[]) => {
+const resolvePublicUserId = async (authUserId: string, email: string) => {
   const supabaseAdmin = getSupabaseAdmin();
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+
+  const authMatch = await supabaseAdmin
+    .from("users")
+    .select("id, auth_user_id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (authMatch.error) {
+    throw new Error(authMatch.error.message);
+  }
+
+  if (authMatch.data?.id !== null && authMatch.data?.id !== undefined) {
+    return String(authMatch.data.id);
+  }
+
+  const emailMatch = await supabaseAdmin
+    .from("users")
+    .select("id, auth_user_id")
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (emailMatch.error) {
+    throw new Error(emailMatch.error.message);
+  }
+
+  if (emailMatch.data?.id === null || emailMatch.data?.id === undefined) {
+    throw new Error("Public user record not found.");
+  }
+
+  if (String(emailMatch.data.auth_user_id || "").trim() !== authUserId) {
+    const relink = await supabaseAdmin
+      .from("users")
+      .update({ auth_user_id: authUserId })
+      .eq("id", emailMatch.data.id);
+
+    if (relink.error) {
+      throw new Error(relink.error.message);
+    }
+  }
+
+  return String(emailMatch.data.id);
+};
+
+const upsertUserRoleAssignments = async (publicUserId: string, assignments: RoleAssignmentInput[]) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
 
   if (assignments.length === 0) {
     return;
@@ -87,7 +132,7 @@ const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssign
     }
 
     return {
-    user_id: userId,
+    user_id: publicUserId,
     role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
@@ -168,8 +213,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
       }
     }
 
+      let publicUserId: string;
+
+      try {
+        publicUserId = await resolvePublicUserId(userId, targetEmail);
+      } catch (error) {
+        return NextResponse.json(
+          { success: false, error: error instanceof Error ? error.message : "Failed to resolve public user record." },
+          { status: 500 }
+        );
+      }
+
     try {
-      await upsertUserRoleAssignments(userId, payload.assignments || []);
+        await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: error instanceof Error ? error.message : "Failed to update role assignments." },

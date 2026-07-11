@@ -196,7 +196,17 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
     ];
   }
 
-  const userId = user.id;
+  const userRecord = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+
+  if (userRecord.error || userRecord.data?.id === null || userRecord.data?.id === undefined) {
+    return [];
+  }
+
+  const userId = String(userRecord.data.id);
 
   const { data, error } = await supabase
     .from("user_roles")
