@@ -9,6 +9,29 @@ import type {
 import { isOwnerEmail } from "../../../lib/rbac";
 import { matchesUserWorkspace, type WorkspaceView } from "../../../lib/workspace";
 
+interface AdminAuditActor {
+  id: string;
+  email?: string | null;
+  user_metadata?: { full_name?: string | null } | null;
+}
+
+const getActorName = (actor?: AdminAuditActor | null) =>
+  String(actor?.user_metadata?.full_name || actor?.email || "Administrator").trim();
+
+const createIamAuditLog = async (
+  actor: AdminAuditActor | null | undefined,
+  action: string,
+  targetEmail: string,
+  details: string
+) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  await supabaseAdmin.from("audit_logs").insert({
+    action,
+    description: `${action} • ${targetEmail} • ${details} • by ${getActorName(actor)}`,
+    user_id: actor?.id || null,
+  });
+};
+
 const normalizeRole = (value: string | null | undefined) =>
   (value || "employee").trim().toLowerCase();
 
@@ -68,6 +91,11 @@ const extractRoleLookup = (value: unknown) => {
   }
 
   return { id, role_name };
+};
+
+const toTextOrNull = (value: unknown) => {
+  const text = String(value || "").trim();
+  return text ? text : null;
 };
 
 const isMissingAuthUserIdColumnError = (message: string) =>
@@ -269,8 +297,11 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
   const updateAuth = await supabaseAdmin.auth.admin.updateUserById(userId, {
     user_metadata: {
       full_name: payload.full_name,
+      employee_id: payload.employee_id || null,
       role: payload.role,
-      phone_number: null,
+      phone_number: payload.phone_number || null,
+      designation: payload.designation || null,
+      avatar_url: payload.profile_photo_url || null,
       force_password_change: payload.force_password_change,
     },
     ban_duration: payload.is_active ? "none" : "876000h",
@@ -287,7 +318,8 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
       full_name: payload.full_name,
       role: payload.role,
       is_active: payload.is_active,
-      phone_number: null,
+      phone_number: payload.phone_number || null,
+      profile_photo_url: payload.profile_photo_url || null,
       force_password_change: payload.force_password_change,
     },
     { onConflict: "email" }
@@ -304,7 +336,8 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
         full_name: payload.full_name,
         role: payload.role,
         is_active: payload.is_active,
-        phone_number: null,
+        phone_number: payload.phone_number || null,
+        profile_photo_url: payload.profile_photo_url || null,
         force_password_change: payload.force_password_change,
       },
       { onConflict: "email" }
@@ -393,8 +426,11 @@ export async function POST(request: Request) {
       email_confirm: true,
       user_metadata: {
         full_name: payload.full_name,
+        employee_id: payload.employee_id || null,
         role: payload.role,
-        phone_number: null,
+        phone_number: payload.phone_number || null,
+        designation: payload.designation || null,
+        avatar_url: payload.profile_photo_url || null,
         force_password_change: payload.force_password_change,
         workspace: primaryAssignment?.workspace || "office",
         department: primaryAssignment?.department || null,
@@ -418,12 +454,13 @@ export async function POST(request: Request) {
         payload.full_name,
         payload.role,
         payload.is_active,
-        null,
-        null,
+        payload.phone_number || null,
+        payload.profile_photo_url || null,
         payload.force_password_change
       );
 
       await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+      await createIamAuditLog(access.user as AdminAuditActor, "Created User", email, `role=${payload.role}`);
     } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(createResult.data.user.id);
       return NextResponse.json(
@@ -501,6 +538,10 @@ export async function GET(request: Request) {
         ...(assignmentsByUserId.get(authUser.id) || []),
       ];
       const fallbackRole = normalizeRole(String(publicRow?.role || authUser.user_metadata?.role || "employee"));
+      const metadataEmployeeId = toTextOrNull(metadata.employee_id);
+      const metadataDesignation = toTextOrNull(metadata.designation);
+      const lastPasswordReset = toTextOrNull(metadata.last_password_reset);
+      const isLocked = Boolean(metadata.is_locked) || (typeof authUser.banned_until === "string" && Boolean(publicRow?.is_active ?? true));
 
       const assignmentSeed: RoleAssignmentInput[] =
         authAssignments.length > 0
@@ -526,19 +567,25 @@ export async function GET(request: Request) {
 
       const isActive = isOwnerEmail(email)
         ? true
-        : typeof authUser.banned_until === "string"
+        : isLocked
+          ? true
+          : typeof authUser.banned_until === "string"
           ? false
           : Boolean(publicRow?.is_active ?? true);
 
       return {
         auth_user_id: authUser.id,
         full_name: String(publicRow?.full_name || metadata.full_name || authUser.email || "Unknown User"),
+        employee_id: metadataEmployeeId,
         email,
         role: role as UserManagementRecord["role"],
+        designation: metadataDesignation,
         is_active: isActive,
+        is_locked: isLocked,
         phone_number: String(publicRow?.phone_number || metadata.phone_number || "") || null,
         profile_photo_url: String(publicRow?.profile_photo_url || metadata.avatar_url || "") || null,
         force_password_change: Boolean(publicRow?.force_password_change ?? metadata.force_password_change ?? false),
+        last_password_reset: lastPasswordReset,
         created_at: String(publicRow?.created_at || authUser.created_at || "") || null,
         last_sign_in_at: authUser.last_sign_in_at || null,
         assignments: assignmentSeed,
@@ -553,6 +600,59 @@ export async function GET(request: Request) {
         return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
       }
 
+      const employeeResult = await supabaseAdmin
+        .from("employees")
+        .select("id, full_name, email, department, position")
+        .ilike("email", record.email)
+        .maybeSingle();
+
+      const employeeId = employeeResult.data?.id ?? null;
+      const assignedAssetsResult = employeeId
+        ? await supabaseAdmin
+            .from("assignment_records")
+            .select("id, assigned_date, status, assets(asset_name, asset_tag, category)")
+            .eq("employee_id", employeeId)
+            .order("assigned_date", { ascending: false })
+            .limit(10)
+        : { data: [] as unknown[] };
+
+      const ticketsByEmployee = employeeId
+        ? await supabaseAdmin
+            .from("tickets")
+            .select("id, title, status, priority, category, created_at")
+            .eq("employee_id", employeeId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+        : { data: [] as unknown[] };
+
+      const publicUserRow = publicByEmail.get(record.email);
+      const publicUserId = publicUserRow?.id ? Number(publicUserRow.id) : null;
+      const ticketsByAssignee = publicUserId
+        ? await supabaseAdmin
+            .from("tickets")
+            .select("id, title, status, priority, category, created_at")
+            .eq("assigned_to", publicUserId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+        : { data: [] as unknown[] };
+
+      const auditQuery = supabaseAdmin
+        .from("audit_logs")
+        .select("id, created_at, action, description")
+        .or(`description.ilike.%${record.email}%,description.ilike.%${record.full_name}%`)
+        .order("created_at", { ascending: false })
+        .limit(25);
+
+      const auditResult = await auditQuery;
+      const loginHistory = (auditResult.data || []).filter((item) => String(item.action || "").toLowerCase().includes("login"));
+
+      const sessionResult = await supabaseAdmin
+        .from("user_sessions")
+        .select("id, created_at, expires_at, ip_address, user_agent")
+        .or(`user_id.eq.${requestedUserId}${publicUserId ? `,user_id.eq.${publicUserId}` : ""}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
       return NextResponse.json({
         success: true,
         data: record,
@@ -560,14 +660,27 @@ export async function GET(request: Request) {
           overview: record,
           security: {
             force_password_change: record.force_password_change,
-            last_password_reset: null,
+            last_password_reset: record.last_password_reset,
+            is_locked: record.is_locked,
           },
           permissions: record.assignments,
           workspace: record.assignments,
-          activity: [],
-          devices: [],
-          sessions: [],
-          audit_log: [],
+          activity: auditResult.data || [],
+          devices: assignedAssetsResult.data || [],
+          sessions: sessionResult.data || [],
+          audit_log: auditResult.data || [],
+          assigned_assets: assignedAssetsResult.data || [],
+          assigned_tickets: [...(ticketsByEmployee.data || []), ...(ticketsByAssignee.data || [])],
+          login_history: loginHistory,
+          personal_information: {
+            employee_id: record.employee_id,
+            phone_number: record.phone_number,
+            department: employeeResult.data?.department || record.assignments[0]?.department || null,
+            designation: record.designation || employeeResult.data?.position || null,
+            workspace: record.assignments[0]?.workspace || null,
+            vessel_id: record.assignments[0]?.vessel_id || null,
+            profile_photo_url: record.profile_photo_url,
+          },
         },
       });
     }
@@ -599,6 +712,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
 
+    const targetEmail = await resolveEmail(userId);
+    if (targetEmail) {
+      await createIamAuditLog(access.user as AdminAuditActor, "Updated User", targetEmail, `role=${body.role}`);
+    }
+
     return NextResponse.json({ success: true, user_id: userId });
   } catch (error) {
     return NextResponse.json(
@@ -625,6 +743,8 @@ export async function DELETE(request: Request) {
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
+
+    await createIamAuditLog(access.user as AdminAuditActor, "Deleted User", userId, "Account removed");
 
     return NextResponse.json({ success: true });
   } catch (error) {

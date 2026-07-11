@@ -49,6 +49,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 type StatusFilter = "all" | "active" | "disabled" | "pending" | "locked";
 type WorkspaceFilter = "all" | "office" | "fleet" | "both";
+type LastLoginFilter = "all" | "today" | "7d" | "30d" | "never";
 
 const defaultAssignment = (workspace = "office"): RoleAssignmentInput => ({
   role_id: "",
@@ -83,6 +84,7 @@ export default function UsersPage() {
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [workspaceFilter, setWorkspaceFilter] = useState<WorkspaceFilter>("all");
+  const [lastLoginFilter, setLastLoginFilter] = useState<LastLoginFilter>("all");
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [visibleCount, setVisibleCount] = useState(25);
   const [useInfiniteScroll, setUseInfiniteScroll] = useState(true);
@@ -90,6 +92,7 @@ export default function UsersPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UserManagementRecord | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     setNewUser(newUserSeed(defaultWorkspace));
@@ -120,6 +123,32 @@ export default function UsersPage() {
     const text = await response.text();
     return text ? (JSON.parse(text) as T) : ({} as T);
   };
+
+  const uploadProfilePhoto = useCallback(async (file: File | null) => {
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    try {
+      const extension = file.name.split(".").pop() || "jpg";
+      const filePath = `staged-users/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+      const uploadResult = await supabase.storage.from("profile-photos").upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+      if (uploadResult.error) {
+        throw new Error(uploadResult.error.message);
+      }
+
+      const { data } = supabase.storage.from("profile-photos").getPublicUrl(filePath);
+      setNewUser((prev) => ({ ...prev, profile_photo_url: data.publicUrl }));
+      showToast("Profile picture uploaded.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to upload profile picture.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, []);
 
   const loadUsers = useCallback(async () => {
     const query = workspaceScope === "all" ? "" : `?workspace=${workspaceScope}`;
@@ -182,6 +211,7 @@ export default function UsersPage() {
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const now = Date.now();
 
     return users.filter((user) => {
       const assignment = user.assignments[0] || null;
@@ -189,25 +219,28 @@ export default function UsersPage() {
       const workspace = assignment?.workspace || "company";
       const vessel = assignment?.vessel_id ? `vessel ${assignment.vessel_id}` : "";
       const workspaceLabel = workspace === "company" ? "both" : workspace;
+      const statusText = user.is_locked ? "locked" : user.is_active ? "active" : "inactive";
 
       const matchSearch =
         !query ||
         user.full_name.toLowerCase().includes(query) ||
+        (user.employee_id || "").toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
         user.role.toLowerCase().includes(query) ||
+        (user.designation || "").toLowerCase().includes(query) ||
         department.includes(query) ||
         workspaceLabel.includes(query) ||
         vessel.includes(query) ||
-        (user.is_active ? "active" : "disabled").includes(query);
+        statusText.includes(query);
 
       const matchRole = roleFilter === "all" || user.role === roleFilter;
       const matchDepartment = departmentFilter === "all" || department === departmentFilter;
       const matchStatus =
         statusFilter === "all" ||
-        (statusFilter === "active" && user.is_active) ||
-        (statusFilter === "disabled" && !user.is_active) ||
+        (statusFilter === "active" && user.is_active && !user.is_locked) ||
+        (statusFilter === "disabled" && !user.is_active && !user.is_locked) ||
         (statusFilter === "pending" && !user.last_sign_in_at) ||
-        (statusFilter === "locked" && !user.is_active && !!user.last_sign_in_at);
+        (statusFilter === "locked" && user.is_locked);
 
       const matchWorkspace =
         workspaceFilter === "all" ||
@@ -215,9 +248,17 @@ export default function UsersPage() {
         (workspaceFilter === "office" && workspace === "office") ||
         (workspaceFilter === "fleet" && workspace === "fleet");
 
-      return matchesUserWorkspace(user, workspaceScope) && matchSearch && matchRole && matchDepartment && matchStatus && matchWorkspace;
+      const lastLoginAge = user.last_sign_in_at ? now - new Date(user.last_sign_in_at).getTime() : null;
+      const matchLastLogin =
+        lastLoginFilter === "all" ||
+        (lastLoginFilter === "never" && !user.last_sign_in_at) ||
+        (lastLoginFilter === "today" && lastLoginAge !== null && lastLoginAge <= 24 * 60 * 60 * 1000) ||
+        (lastLoginFilter === "7d" && lastLoginAge !== null && lastLoginAge <= 7 * 24 * 60 * 60 * 1000) ||
+        (lastLoginFilter === "30d" && lastLoginAge !== null && lastLoginAge <= 30 * 24 * 60 * 60 * 1000);
+
+      return matchesUserWorkspace(user, workspaceScope) && matchSearch && matchRole && matchDepartment && matchStatus && matchWorkspace && matchLastLogin;
     });
-  }, [departmentFilter, roleFilter, search, statusFilter, users, workspaceFilter, workspaceScope]);
+  }, [departmentFilter, lastLoginFilter, roleFilter, search, statusFilter, users, workspaceFilter, workspaceScope]);
 
   const visibleUsers = useMemo(
     () => (useInfiniteScroll ? filteredUsers.slice(0, visibleCount) : filteredUsers.slice(0, pageSize)),
@@ -237,24 +278,17 @@ export default function UsersPage() {
     const total = users.length;
     const office = users.filter((user) => (user.assignments[0]?.workspace || "") === "office").length;
     const fleet = users.filter((user) => (user.assignments[0]?.workspace || "") === "fleet").length;
-    const disabled = users.filter((user) => !user.is_active).length;
-    const pending = users.filter((user) => !user.last_sign_in_at).length;
-    const activeSessions = users.filter((user) => !!user.last_sign_in_at).length;
-    const recentLogins = users
-      .filter((user) => !!user.last_sign_in_at)
-      .sort((a, b) => Date.parse(b.last_sign_in_at || "") - Date.parse(a.last_sign_in_at || ""))
-      .slice(0, 5).length;
-    const passwordExpiring = users.filter((user) => user.force_password_change).length;
+    const online = users.filter((user) => user.last_sign_in_at && Date.now() - Date.parse(user.last_sign_in_at) <= 24 * 60 * 60 * 1000).length;
+    const locked = users.filter((user) => user.is_locked).length;
+    const inactive = users.filter((user) => !user.is_active && !user.is_locked).length;
 
     return [
       { label: "Total Users", value: total },
       { label: "Office Users", value: office },
       { label: "Fleet Users", value: fleet },
-      { label: "Disabled Users", value: disabled },
-      { label: "Pending Invitations", value: pending },
-      { label: "Active Sessions", value: activeSessions },
-      { label: "Recent Logins", value: recentLogins },
-      { label: "Password Expiring", value: passwordExpiring },
+      { label: "Online Users", value: online },
+      { label: "Locked Users", value: locked },
+      { label: "Inactive Users", value: inactive },
     ];
   }, [users]);
 
@@ -341,6 +375,50 @@ export default function UsersPage() {
       showToast("Password reset link generated and copied.");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to reset password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleForcePasswordChange = async (user: UserManagementRecord, enabled: boolean) => {
+    setSaving(true);
+    try {
+      const response = await fetchWithSession(`/api/admin/users/${user.auth_user_id}/force-password-change`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force_password_change: enabled }),
+      });
+      const json = await parseResponse<{ success?: boolean; error?: string }>(response);
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || "Failed to update password policy.");
+      }
+
+      await loadUsers();
+      showToast(enabled ? "Force password change enabled." : "Force password change disabled.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to update password policy.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleLockUser = async (user: UserManagementRecord, shouldLock: boolean) => {
+    setSaving(true);
+    try {
+      const response = await fetchWithSession(`/api/admin/users/${user.auth_user_id}/security`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: shouldLock ? "lock" : "unlock" }),
+      });
+      const json = await parseResponse<{ success?: boolean; error?: string }>(response);
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || "Failed to update lock state.");
+      }
+
+      await loadUsers();
+      showToast(shouldLock ? "User locked." : "User unlocked.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to update lock state.");
     } finally {
       setSaving(false);
     }
@@ -554,9 +632,21 @@ export default function UsersPage() {
               style={styles.input}
             />
             <input
+              value={newUser.employee_id || ""}
+              onChange={(event) => setNewUser((prev) => ({ ...prev, employee_id: event.target.value || null }))}
+              placeholder="Employee ID"
+              style={styles.input}
+            />
+            <input
               value={newUser.email}
               onChange={(event) => setNewUser((prev) => ({ ...prev, email: event.target.value }))}
               placeholder="Email"
+              style={styles.input}
+            />
+            <input
+              value={newUser.phone_number || ""}
+              onChange={(event) => setNewUser((prev) => ({ ...prev, phone_number: event.target.value || null }))}
+              placeholder="Phone"
               style={styles.input}
             />
             <input
@@ -568,6 +658,12 @@ export default function UsersPage() {
           </div>
 
           <div style={styles.gridRow}>
+            <input
+              value={newUser.designation || ""}
+              onChange={(event) => setNewUser((prev) => ({ ...prev, designation: event.target.value || null }))}
+              placeholder="Designation"
+              style={styles.input}
+            />
             <select
               value={newUser.role}
               onChange={(event) =>
@@ -647,7 +743,29 @@ export default function UsersPage() {
               placeholder="Vessel"
               style={styles.input}
             />
+
+            <label style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span>{uploadingPhoto ? "Uploading photo..." : newUser.profile_photo_url ? "Profile picture ready" : "Upload Profile Picture"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  void uploadProfilePhoto(file);
+                }}
+              />
+            </label>
           </div>
+
+          {newUser.profile_photo_url && (
+            <div style={styles.profilePreviewRow}>
+              <div style={{ ...styles.avatar, backgroundImage: `url(${newUser.profile_photo_url})`, backgroundSize: "cover", backgroundPosition: "center", color: "transparent" }}>
+                .
+              </div>
+              <span style={styles.previewLabel}>Profile picture attached</span>
+            </div>
+          )}
 
           <div style={styles.checkboxRow}>
             <label style={styles.checkboxLabel}>
@@ -715,6 +833,14 @@ export default function UsersPage() {
             <option value="locked">Status: Locked</option>
           </select>
 
+          <select value={lastLoginFilter} onChange={(event) => setLastLoginFilter(event.target.value as LastLoginFilter)} style={styles.input}>
+            <option value="all">Last Login: All</option>
+            <option value="today">Last Login: Today</option>
+            <option value="7d">Last Login: 7 Days</option>
+            <option value="30d">Last Login: 30 Days</option>
+            <option value="never">Last Login: Never</option>
+          </select>
+
           <select
             value={String(pageSize)}
             onChange={(event) => {
@@ -743,6 +869,7 @@ export default function UsersPage() {
               <tr>
                 <th style={styles.th}>Avatar</th>
                 <th style={styles.th}>Name</th>
+                <th style={styles.th}>Employee ID</th>
                 <th style={styles.th}>Email</th>
                 <th style={styles.th}>Role</th>
                 <th style={styles.th}>Workspace</th>
@@ -757,18 +884,27 @@ export default function UsersPage() {
             <tbody>
               {visibleUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={styles.emptyCell}>No users found.</td>
+                  <td colSpan={12} style={styles.emptyCell}>No users found.</td>
                 </tr>
               ) : (
                 visibleUsers.map((user) => {
                   const assignment = user.assignments[0] || defaultAssignment(defaultWorkspace);
                   const owner = isOwnerEmail(user.email);
+                  const statusLabel = user.is_locked ? "Locked" : user.is_active ? "Active" : "Inactive";
+                  const statusStyle = user.is_locked ? styles.badgeWarning : user.is_active ? styles.badgeActive : styles.badgeDisabled;
                   return (
                     <tr key={user.auth_user_id}>
                       <td style={styles.td}>
-                        <div style={styles.avatar}>{user.full_name.charAt(0).toUpperCase()}</div>
+                        {user.profile_photo_url ? (
+                          <div style={{ ...styles.avatar, backgroundImage: `url(${user.profile_photo_url})`, backgroundSize: "cover", backgroundPosition: "center", color: "transparent" }}>
+                            .
+                          </div>
+                        ) : (
+                          <div style={styles.avatar}>{user.full_name.charAt(0).toUpperCase()}</div>
+                        )}
                       </td>
                       <td style={styles.td}>{user.full_name}</td>
+                      <td style={styles.td}>{user.employee_id || "-"}</td>
                       <td style={styles.td}>{user.email}</td>
                       <td style={styles.td}>
                         <select
@@ -837,8 +973,8 @@ export default function UsersPage() {
                         />
                       </td>
                       <td style={styles.td}>
-                        <span style={user.is_active ? styles.badgeActive : styles.badgeDisabled}>
-                          {user.is_active ? "Active" : "Disabled"}
+                        <span style={statusStyle}>
+                          {statusLabel}
                         </span>
                       </td>
                       <td style={styles.td}>{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "Never"}</td>
@@ -847,13 +983,28 @@ export default function UsersPage() {
                         <div style={styles.actionsColumn}>
                           <Link href={`/admin/users/${user.auth_user_id}`} style={styles.actionLink}>View</Link>
                           <Link href={`/admin/users/${user.auth_user_id}?tab=overview`} style={styles.actionLink}>Edit</Link>
+                          <Link href={`/admin/users/${user.auth_user_id}?tab=activity`} style={styles.actionLink}>View Activity</Link>
                           <button disabled={saving || owner} onClick={() => void resetPassword(user)} style={styles.actionButton}>Reset Password</button>
+                          <button
+                            disabled={saving || owner}
+                            onClick={() => void toggleForcePasswordChange(user, !user.force_password_change)}
+                            style={styles.actionButton}
+                          >
+                            {user.force_password_change ? "Disable Force Change" : "Force Password Change"}
+                          </button>
+                          <button
+                            disabled={saving || owner}
+                            onClick={() => void toggleLockUser(user, !user.is_locked)}
+                            style={user.is_locked ? styles.actionButton : styles.actionDangerButton}
+                          >
+                            {user.is_locked ? "Unlock" : "Lock"}
+                          </button>
                           <button
                             disabled={saving || owner}
                             onClick={() => void saveUserImmediately(user, { is_active: !user.is_active })}
                             style={styles.actionButton}
                           >
-                            {user.is_active ? "Disable" : "Enable"}
+                            {user.is_active ? "Deactivate" : "Activate"}
                           </button>
                           <button disabled={saving || owner} onClick={() => setConfirmDelete(user)} style={styles.actionDangerButton}>Delete</button>
                           <Link href={`/admin/users/${user.auth_user_id}/security`} style={styles.actionLink}>Security</Link>
@@ -929,7 +1080,10 @@ const styles: Record<string, CSSProperties> = {
   emptyCell: { textAlign: "center", padding: 26, color: "#64748b" },
   avatar: { width: 34, height: 34, borderRadius: "50%", background: "#2563eb", color: "white", display: "grid", placeItems: "center", fontWeight: 800 },
   badgeActive: { display: "inline-flex", borderRadius: 999, background: "#dcfce7", color: "#166534", padding: "4px 8px", fontSize: 11, fontWeight: 700 },
+  badgeWarning: { display: "inline-flex", borderRadius: 999, background: "#fef3c7", color: "#b45309", padding: "4px 8px", fontSize: 11, fontWeight: 700 },
   badgeDisabled: { display: "inline-flex", borderRadius: 999, background: "#fee2e2", color: "#991b1b", padding: "4px 8px", fontSize: 11, fontWeight: 700 },
+  profilePreviewRow: { display: "flex", alignItems: "center", gap: 10 },
+  previewLabel: { color: "#475569", fontSize: 13, fontWeight: 600 },
   actionsColumn: { display: "grid", gap: 6 },
   actionLink: { color: "#1d4ed8", fontWeight: 700, textDecoration: "none", fontSize: 12 },
   actionButton: { border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc", color: "#0f172a", padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" },

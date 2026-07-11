@@ -3,6 +3,29 @@ import { requireAdminAccessFromRequest } from "../../../../../lib/server/adminAu
 import { getSupabaseAdmin } from "../../../../../lib/server/supabaseAdmin";
 import { isOwnerEmail } from "../../../../../lib/rbac";
 
+interface AdminAuditActor {
+  id: string;
+  email?: string | null;
+  user_metadata?: { full_name?: string | null } | null;
+}
+
+const getActorName = (actor?: AdminAuditActor | null) =>
+  String(actor?.user_metadata?.full_name || actor?.email || "Administrator").trim();
+
+const createIamAuditLog = async (
+  actor: AdminAuditActor | null | undefined,
+  action: string,
+  targetEmail: string,
+  details: string
+) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  await supabaseAdmin.from("audit_logs").insert({
+    action,
+    description: `${action} • ${targetEmail} • ${details} • by ${getActorName(actor)}`,
+    user_id: actor?.id || null,
+  });
+};
+
 export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -43,7 +66,31 @@ export async function POST(request: Request, context: { params: Promise<{ userId
         return NextResponse.json({ success: false, error: result.error.message }, { status: 500 });
       }
 
+      await createIamAuditLog(access.user as AdminAuditActor, "Set Password", email, "Password changed by admin");
+
       return NextResponse.json({ success: true });
+    }
+
+    if (body.action === "lock" || body.action === "unlock") {
+      const locked = body.action === "lock";
+      const result = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        ban_duration: locked ? "876000h" : "none",
+        user_metadata: {
+          ...(lookup.data.user.user_metadata || {}),
+          is_locked: locked,
+        },
+      });
+
+      if (result.error) {
+        return NextResponse.json({ success: false, error: result.error.message }, { status: 500 });
+      }
+
+      if (locked) {
+        await supabaseAdmin.auth.admin.signOut(userId, "global");
+      }
+
+      await createIamAuditLog(access.user as AdminAuditActor, locked ? "Locked User" : "Unlocked User", email, `locked=${locked}`);
+      return NextResponse.json({ success: true, is_locked: locked });
     }
 
     if (body.action === "force-logout") {
@@ -53,6 +100,7 @@ export async function POST(request: Request, context: { params: Promise<{ userId
       }
 
       await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
+      await createIamAuditLog(access.user as AdminAuditActor, "Force Logout", email, "Revoked all sessions");
       return NextResponse.json({ success: true });
     }
 

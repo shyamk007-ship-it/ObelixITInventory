@@ -27,6 +27,7 @@ export default function UserSecurityPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastPasswordReset, setLastPasswordReset] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
 
   const fetchWithSession = useCallback(async (input: RequestInfo | URL, init?: RequestInit) => {
     const {
@@ -45,6 +46,36 @@ export default function UserSecurityPage() {
     const text = await response.text();
     return text ? (JSON.parse(text) as SecurityData) : ({} as SecurityData);
   };
+
+  useEffect(() => {
+    const loadSecurityState = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers = new Headers();
+      if (session?.access_token) {
+        headers.set("Authorization", `Bearer ${session.access_token}`);
+      }
+
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, { method: "GET", headers });
+      const text = await response.text();
+      const payload = text
+        ? (JSON.parse(text) as {
+            success?: boolean;
+            data?: { last_password_reset?: string | null };
+            tabs?: { security?: { last_password_reset?: string | null; is_locked?: boolean } };
+          })
+        : {};
+
+      if (response.ok && payload.success) {
+        setLastPasswordReset(payload.tabs?.security?.last_password_reset || null);
+        setIsLocked(Boolean(payload.tabs?.security?.is_locked));
+      }
+    };
+
+    void loadSecurityState();
+  }, [userId]);
 
   const doResetPassword = async () => {
     setSaving(true);
@@ -143,6 +174,28 @@ export default function UserSecurityPage() {
     setSaving(false);
   };
 
+  const doToggleLock = async (locked: boolean) => {
+    setSaving(true);
+    setNotice(null);
+
+    const response = await fetchWithSession(`/api/admin/users/${userId}/security`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: locked ? "lock" : "unlock" }),
+    });
+    const json = await parse(response);
+
+    if (!response.ok || !json.success) {
+      setNotice(json.error || "Failed to update account lock state.");
+      setSaving(false);
+      return;
+    }
+
+    setIsLocked(locked);
+    setNotice(locked ? "User locked successfully." : "User unlocked successfully.");
+    setSaving(false);
+  };
+
   useEffect(() => {
     if (!lastPasswordReset) {
       setLastPasswordReset(null);
@@ -204,12 +257,20 @@ export default function UserSecurityPage() {
             <button disabled={saving} onClick={() => void doRequirePasswordChange()} style={styles.primaryButton}>
               Save Password Policy
             </button>
+            <button
+              disabled={saving}
+              onClick={() => void doToggleLock(!isLocked)}
+              style={isLocked ? styles.secondaryButton : styles.dangerButton}
+            >
+              {isLocked ? "Unlock User" : "Lock User"}
+            </button>
             <button disabled={saving} onClick={() => void doForceLogoutSessions()} style={styles.dangerButton}>
               Force Logout All Sessions
             </button>
           </div>
 
           <p style={styles.meta}>Last Password Reset: {lastPasswordReset ? new Date(lastPasswordReset).toLocaleString() : "Not recorded"}</p>
+          <p style={styles.meta}>Account Lock: {isLocked ? "Locked" : "Unlocked"}</p>
         </section>
       </div>
     </div>

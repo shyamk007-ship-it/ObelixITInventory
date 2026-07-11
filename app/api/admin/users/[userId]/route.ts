@@ -4,6 +4,29 @@ import { getSupabaseAdmin } from "../../../../lib/server/supabaseAdmin";
 import type { RoleAssignmentInput, UpdateUserPayload } from "../../../../lib/user-management";
 import { isOwnerEmail } from "../../../../lib/rbac";
 
+interface AdminAuditActor {
+  id: string;
+  email?: string | null;
+  user_metadata?: { full_name?: string | null } | null;
+}
+
+const getActorName = (actor?: AdminAuditActor | null) =>
+  String(actor?.user_metadata?.full_name || actor?.email || "Administrator").trim();
+
+const createIamAuditLog = async (
+  actor: AdminAuditActor | null | undefined,
+  action: string,
+  targetEmail: string,
+  details: string
+) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  await supabaseAdmin.from("audit_logs").insert({
+    action,
+    description: `${action} • ${targetEmail} • ${details} • by ${getActorName(actor)}`,
+    user_id: actor?.id || null,
+  });
+};
+
 const normalizeRoleKey = (value: string | null | undefined) =>
   (value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
@@ -157,8 +180,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     const updateAuth = await supabaseAdmin.auth.admin.updateUserById(userId, {
       user_metadata: {
         full_name: payload.full_name,
+        employee_id: payload.employee_id || null,
         role: payload.role,
         phone_number: payload.phone_number,
+        designation: payload.designation || null,
+        avatar_url: payload.profile_photo_url || null,
         force_password_change: payload.force_password_change,
       },
       ban_duration: payload.is_active ? "none" : "876000h",
@@ -176,6 +202,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
         role: payload.role,
         is_active: payload.is_active,
         phone_number: payload.phone_number,
+        profile_photo_url: payload.profile_photo_url || null,
         force_password_change: payload.force_password_change,
       },
       { onConflict: "email" }
@@ -210,13 +237,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
       }
 
     try {
-        await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+      await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: error instanceof Error ? error.message : "Failed to update role assignments." },
         { status: 500 }
       );
     }
+
+    await createIamAuditLog(access.user as AdminAuditActor, "Patched User", targetEmail, `role=${payload.role}`);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -253,6 +282,8 @@ export async function DELETE(_request: Request, context: { params: Promise<{ use
     if (result.error) {
       return NextResponse.json({ success: false, error: result.error.message }, { status: 500 });
     }
+
+    await createIamAuditLog(access.user as AdminAuditActor, "Deleted User", targetEmail, "Account removed");
 
     return NextResponse.json({ success: true });
   } catch (error) {

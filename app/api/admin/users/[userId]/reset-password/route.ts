@@ -3,6 +3,15 @@ import { requireAdminAccessFromRequest } from "../../../../../lib/server/adminAu
 import { getSupabaseAdmin } from "../../../../../lib/server/supabaseAdmin";
 import { isOwnerEmail } from "../../../../../lib/rbac";
 
+interface AdminAuditActor {
+  id: string;
+  email?: string | null;
+  user_metadata?: { full_name?: string | null } | null;
+}
+
+const getActorName = (actor?: AdminAuditActor | null) =>
+  String(actor?.user_metadata?.full_name || actor?.email || "Administrator").trim();
+
 export async function POST(_request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -35,6 +44,12 @@ export async function POST(_request: Request, context: { params: Promise<{ userI
     if (resetResult.error) {
       return NextResponse.json({ success: false, error: resetResult.error.message }, { status: 500 });
     }
+
+    await supabaseAdmin.from("audit_logs").insert({
+      action: "Reset Password",
+      description: `Reset Password • ${email} • Recovery link generated • by ${getActorName(access.user as AdminAuditActor)}`,
+      user_id: (access.user as AdminAuditActor)?.id || null,
+    });
 
     return NextResponse.json({
       success: true,

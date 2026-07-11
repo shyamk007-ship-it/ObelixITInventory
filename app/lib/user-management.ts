@@ -31,12 +31,16 @@ export interface RoleAssignmentInput {
 export interface UserManagementRecord {
   auth_user_id: string;
   full_name: string;
+  employee_id: string | null;
   email: string;
   role: ManagedRole;
+  designation: string | null;
   is_active: boolean;
+  is_locked: boolean;
   phone_number: string | null;
   profile_photo_url: string | null;
   force_password_change: boolean;
+  last_password_reset: string | null;
   created_at: string | null;
   last_sign_in_at: string | null;
   assignments: RoleAssignmentInput[];
@@ -44,9 +48,13 @@ export interface UserManagementRecord {
 
 export interface CreateUserPayload {
   full_name: string;
+  employee_id?: string | null;
   email: string;
   role: ManagedRole;
   temporary_password?: string;
+  phone_number?: string | null;
+  designation?: string | null;
+  profile_photo_url?: string | null;
   is_active: boolean;
   force_password_change: boolean;
   assignments: RoleAssignmentInput[];
@@ -54,8 +62,11 @@ export interface CreateUserPayload {
 
 export interface UpdateUserPayload {
   full_name: string;
+  employee_id?: string | null;
   role: ManagedRole;
   phone_number: string | null;
+  designation?: string | null;
+  profile_photo_url?: string | null;
   is_active: boolean;
   force_password_change: boolean;
   assignments: RoleAssignmentInput[];
