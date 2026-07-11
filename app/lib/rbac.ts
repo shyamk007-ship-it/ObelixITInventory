@@ -83,7 +83,8 @@ export const isVesselAssignedRole = (role: Role) =>
 
 export const canViewAdminDashboard = (role: Role) => isOfficeRole(role);
 export const canAccessAdmin = (role: Role) => isOfficeRole(role);
-export const canManageUsers = (role: Role) => role === "super_admin" || role === "admin";
+export const canManageUsers = (role: Role) =>
+  role === "super_admin" || role === "admin" || role === "office_admin";
 export const canManageAssets = (role: Role) => isOfficeRole(role);
 export const canViewEmployees = (role: Role) => isOfficeRole(role);
 export const canAssignAssets = (role: Role) => isOfficeRole(role);

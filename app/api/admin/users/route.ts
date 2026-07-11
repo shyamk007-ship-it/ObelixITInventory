@@ -85,6 +85,96 @@ const ensurePublicUser = async (
   }
 };
 
+const resolveEmail = async (userId: string): Promise<string | null> => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const lookup = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (lookup.error || !lookup.data.user?.email) {
+    return null;
+  }
+  return lookup.data.user.email.trim().toLowerCase();
+};
+
+const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const targetEmail = await resolveEmail(userId);
+
+  if (!targetEmail) {
+    return { success: false as const, status: 404, error: "User not found." };
+  }
+
+  if (isOwnerEmail(targetEmail)) {
+    return { success: false as const, status: 403, error: "Owner account cannot be modified." };
+  }
+
+  const updateAuth = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      full_name: payload.full_name,
+      role: payload.role,
+      phone_number: null,
+      force_password_change: payload.force_password_change,
+    },
+    ban_duration: payload.is_active ? "none" : "876000h",
+  });
+
+  if (updateAuth.error) {
+    return { success: false as const, status: 500, error: updateAuth.error.message };
+  }
+
+  const upsertPublic = await supabaseAdmin.from("users").upsert(
+    {
+      auth_user_id: userId,
+      email: targetEmail,
+      full_name: payload.full_name,
+      role: payload.role,
+      is_active: payload.is_active,
+      phone_number: null,
+      force_password_change: payload.force_password_change,
+    },
+    { onConflict: "email" }
+  );
+
+  if (upsertPublic.error) {
+    return { success: false as const, status: 500, error: upsertPublic.error.message };
+  }
+
+  try {
+    await upsertUserRoleAssignments(userId, payload.assignments || []);
+  } catch (error) {
+    return {
+      success: false as const,
+      status: 500,
+      error: error instanceof Error ? error.message : "Failed to update role assignments.",
+    };
+  }
+
+  return { success: true as const, status: 200 };
+};
+
+const deleteUserCore = async (userId: string) => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const targetEmail = await resolveEmail(userId);
+
+  if (!targetEmail) {
+    return { success: false as const, status: 404, error: "User not found." };
+  }
+
+  if (isOwnerEmail(targetEmail)) {
+    return { success: false as const, status: 403, error: "Owner account cannot be deleted." };
+  }
+
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+  await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
+  await supabaseAdmin.from("workspace_mappings").delete().eq("user_id", userId);
+  await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
+
+  const result = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (result.error) {
+    return { success: false as const, status: 500, error: result.error.message };
+  }
+
+  return { success: true as const, status: 200 };
+};
+
 export async function POST(request: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -106,6 +196,7 @@ export async function POST(request: Request) {
 
     const temporaryPassword = payload.temporary_password || `${Math.random().toString(36).slice(2)}Aa!9`;
 
+    const primaryAssignment = (payload.assignments || [])[0] || null;
     const createResult = await supabaseAdmin.auth.admin.createUser({
       email,
       password: temporaryPassword,
@@ -115,6 +206,10 @@ export async function POST(request: Request) {
         role: payload.role,
         phone_number: null,
         force_password_change: payload.force_password_change,
+        workspace: primaryAssignment?.workspace || "office",
+        department: primaryAssignment?.department || null,
+        vessel_id: primaryAssignment?.vessel_id || null,
+        status: payload.is_active ? "active" : "disabled",
       },
       ban_duration: payload.is_active ? "none" : "876000h",
     });
@@ -163,6 +258,9 @@ export async function GET(request: Request) {
     if (!access.ok) {
       return access.response;
     }
+
+    const requestUrl = new URL(request.url);
+    const requestedUserId = requestUrl.searchParams.get("userId");
 
     const [authUsersResult, publicUsersResult, roleAssignmentsResult] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
@@ -238,7 +336,86 @@ export async function GET(request: Request) {
       };
     });
 
+    if (requestedUserId) {
+      const record = records.find((user) => user.auth_user_id === requestedUserId) || null;
+      if (!record) {
+        return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: record,
+        tabs: {
+          overview: record,
+          security: {
+            force_password_change: record.force_password_change,
+            last_password_reset: null,
+          },
+          permissions: record.assignments,
+          workspace: record.assignments,
+          activity: [],
+          devices: [],
+          sessions: [],
+          audit_log: [],
+        },
+      });
+    }
+
     return NextResponse.json({ success: true, data: records });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unexpected server error." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const access = await requireAdminAccessFromRequest(request);
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const body = (await request.json()) as CreateUserPayload & { user_id?: string };
+    const userId = String(body.user_id || "").trim();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "user_id is required." }, { status: 400 });
+    }
+
+    const result = await updateUserCore(userId, body);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json({ success: true, user_id: userId });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unexpected server error." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const access = await requireAdminAccessFromRequest(request);
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const body = (await request.json()) as { user_id?: string };
+    const userId = String(body.user_id || "").trim();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "user_id is required." }, { status: 400 });
+    }
+
+    const result = await deleteUserCore(userId);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Unexpected server error." },
