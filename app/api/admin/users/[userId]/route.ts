@@ -17,12 +17,43 @@ const toCanonicalRoleKey = (value: string | null | undefined) => {
   return roleKey;
 };
 
+const DEFAULT_ROLE_NAMES = [
+  "super_admin",
+  "office_admin",
+  "fleet_admin",
+  "captain",
+  "chief_engineer",
+  "it_officer",
+  "crew_member",
+] as const;
+
 const getRoleIdMap = async () => {
   const supabaseAdmin = getSupabaseAdmin();
-  const { data, error } = await supabaseAdmin.from("roles").select("id, role_name");
+  const { data: existingRoles, error } = await supabaseAdmin.from("roles").select("id, role_name");
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  const existingRoleKeys = new Set(
+    (existingRoles || []).map((record) => normalizeRoleKey(String(record.role_name || ""))).filter(Boolean)
+  );
+  const missingRoleNames = DEFAULT_ROLE_NAMES.filter((roleName) => !existingRoleKeys.has(roleName));
+
+  if (missingRoleNames.length > 0) {
+    const insertResult = await supabaseAdmin
+      .from("roles")
+      .insert(missingRoleNames.map((role_name) => ({ role_name })));
+
+    if (insertResult.error) {
+      throw new Error(insertResult.error.message);
+    }
+  }
+
+  const { data, error: reloadError } = await supabaseAdmin.from("roles").select("id, role_name");
+
+  if (reloadError) {
+    throw new Error(reloadError.message);
   }
 
   const roleMap = new Map<string, string>();
