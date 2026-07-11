@@ -14,6 +14,16 @@ const normalizeRole = (value: string | null | undefined) =>
 const normalizeRoleKey = (value: string | null | undefined) =>
   (value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
+const toCanonicalRoleKey = (value: string | null | undefined) => {
+  const roleKey = normalizeRoleKey(value);
+
+  if (roleKey === "employee" || roleKey === "viewer") return "crew_member";
+  if (roleKey === "admin") return "office_admin";
+  if (roleKey === "it_staff" || roleKey === "eto") return "it_officer";
+
+  return roleKey;
+};
+
 const extractRoleName = (value: unknown): string | null => {
   if (!value) return null;
 
@@ -98,7 +108,7 @@ const upsertUserRoleAssignments = async (userId: string, assignments: RoleAssign
   const roleIdMap = await getRoleIdMap();
 
   const rows = assignments.map((assignment) => {
-    const roleKey = normalizeRoleKey(assignment.role);
+    const roleKey = toCanonicalRoleKey(assignment.role);
     const roleId = roleIdMap.get(roleKey);
 
     if (!roleId) {
