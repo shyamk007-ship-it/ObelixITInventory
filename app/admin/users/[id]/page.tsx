@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { UserManagementRecord } from "../../../lib/user-management";
+import UserActivityFeed from "../../../components/shared/UserActivityFeed";
 import { supabase } from "../../../lib/supabase";
 
 type UserTab = "overview" | "security" | "permissions" | "workspace" | "activity" | "devices" | "sessions" | "audit";
@@ -210,7 +211,7 @@ export default function AdminUserDetailPage() {
         {activeTab === "activity" && (
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>Activity Timeline</h3>
-            <Timeline rows={activityTimeline} emptyMessage="No recent activity recorded." />
+            <UserActivityFeed rows={activityTimeline} emptyMessage="No recent activity recorded." />
           </div>
         )}
 

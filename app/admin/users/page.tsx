@@ -226,6 +226,7 @@ export default function UsersPage() {
         user.full_name.toLowerCase().includes(query) ||
         (user.employee_id || "").toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
+        (user.phone_number || "").toLowerCase().includes(query) ||
         user.role.toLowerCase().includes(query) ||
         (user.designation || "").toLowerCase().includes(query) ||
         department.includes(query) ||
@@ -328,6 +329,10 @@ export default function UsersPage() {
         user_id: merged.auth_user_id,
         full_name: merged.full_name,
         email: merged.email,
+        employee_id: merged.employee_id || null,
+        designation: merged.designation || null,
+        phone_number: merged.phone_number || null,
+        profile_photo_url: merged.profile_photo_url || null,
         temporary_password: "",
         is_active: merged.is_active,
         force_password_change: merged.force_password_change,
@@ -532,12 +537,28 @@ export default function UsersPage() {
   };
 
   const exportCsv = () => {
-    const header = ["full_name", "email", "role", "workspace", "department", "vessel_id", "status", "last_login", "created"];
+    const header = [
+      "full_name",
+      "employee_id",
+      "email",
+      "phone_number",
+      "designation",
+      "role",
+      "workspace",
+      "department",
+      "vessel_id",
+      "status",
+      "last_login",
+      "created",
+    ];
     const rows = filteredUsers.map((user) => {
       const assignment = user.assignments[0] || null;
       return [
         user.full_name,
+        user.employee_id || "",
         user.email,
+        user.phone_number || "",
+        user.designation || "",
         user.role,
         assignment?.workspace || "",
         assignment?.department || "",
@@ -871,6 +892,8 @@ export default function UsersPage() {
                 <th style={styles.th}>Name</th>
                 <th style={styles.th}>Employee ID</th>
                 <th style={styles.th}>Email</th>
+                <th style={styles.th}>Phone</th>
+                <th style={styles.th}>Designation</th>
                 <th style={styles.th}>Role</th>
                 <th style={styles.th}>Workspace</th>
                 <th style={styles.th}>Department</th>
@@ -884,7 +907,7 @@ export default function UsersPage() {
             <tbody>
               {visibleUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={12} style={styles.emptyCell}>No users found.</td>
+                  <td colSpan={14} style={styles.emptyCell}>No users found.</td>
                 </tr>
               ) : (
                 visibleUsers.map((user) => {
@@ -904,8 +927,46 @@ export default function UsersPage() {
                         )}
                       </td>
                       <td style={styles.td}>{user.full_name}</td>
-                      <td style={styles.td}>{user.employee_id || "-"}</td>
+                      <td style={styles.td}>
+                        <input
+                          key={`${user.auth_user_id}-employee`}
+                          defaultValue={user.employee_id || ""}
+                          disabled={saving || owner}
+                          onBlur={(event) =>
+                            void saveUserImmediately(user, {
+                              employee_id: event.target.value.trim() || null,
+                            })
+                          }
+                          style={styles.inlineInput}
+                        />
+                      </td>
                       <td style={styles.td}>{user.email}</td>
+                      <td style={styles.td}>
+                        <input
+                          key={`${user.auth_user_id}-phone`}
+                          defaultValue={user.phone_number || ""}
+                          disabled={saving || owner}
+                          onBlur={(event) =>
+                            void saveUserImmediately(user, {
+                              phone_number: event.target.value.trim() || null,
+                            })
+                          }
+                          style={styles.inlineInput}
+                        />
+                      </td>
+                      <td style={styles.td}>
+                        <input
+                          key={`${user.auth_user_id}-designation`}
+                          defaultValue={user.designation || ""}
+                          disabled={saving || owner}
+                          onBlur={(event) =>
+                            void saveUserImmediately(user, {
+                              designation: event.target.value.trim() || null,
+                            })
+                          }
+                          style={styles.inlineInput}
+                        />
+                      </td>
                       <td style={styles.td}>
                         <select
                           value={user.role}
@@ -943,21 +1004,23 @@ export default function UsersPage() {
                       </td>
                       <td style={styles.td}>
                         <input
-                          value={assignment.department || ""}
-                          disabled={saving}
+                          key={`${user.auth_user_id}-department`}
+                          defaultValue={assignment.department || ""}
+                          disabled={saving || owner}
                           onBlur={(event) =>
                             void saveUserImmediately(user, {
-                              assignments: [{ ...assignment, department: event.target.value || null }],
+                              assignments: [{ ...assignment, department: event.target.value.trim() || null }],
                             })
                           }
-                          defaultValue={assignment.department || ""}
                           style={styles.inlineInput}
                         />
                       </td>
                       <td style={styles.td}>
                         <input
-                          value={assignment.vessel_id || ""}
-                          disabled={saving}
+                          key={`${user.auth_user_id}-vessel`}
+                          type="number"
+                          defaultValue={assignment.vessel_id || ""}
+                          disabled={saving || owner}
                           onBlur={(event) =>
                             void saveUserImmediately(user, {
                               assignments: [
@@ -968,7 +1031,6 @@ export default function UsersPage() {
                               ],
                             })
                           }
-                          defaultValue={assignment.vessel_id || ""}
                           style={styles.inlineInput}
                         />
                       </td>
@@ -1074,7 +1136,7 @@ const styles: Record<string, CSSProperties> = {
   inlineInput: { width: "100%", borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12 },
   inlineSelect: { width: "100%", borderRadius: 8, border: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12 },
   tableWrap: { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 12 },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 1320 },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 1620 },
   th: { textAlign: "left", padding: 12, background: "#f8fafc", fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" },
   td: { padding: 12, borderTop: "1px solid #e2e8f0", color: "#0f172a", fontSize: 13, verticalAlign: "top" },
   emptyCell: { textAlign: "center", padding: 26, color: "#64748b" },
