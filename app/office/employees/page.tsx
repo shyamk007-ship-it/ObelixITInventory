@@ -273,7 +273,7 @@ export default function OfficeEmployeesPage() {
         isNewThisMonth: createdAt ? new Date(createdAt).getMonth() === new Date(now).getMonth() && new Date(createdAt).getFullYear() === new Date(now).getFullYear() : false,
       };
     });
-  }, [activeAssignmentsByEmployee, employees, now, ticketsByEmployee]);
+  }, [activeAssignmentsByEmployee, employees, ticketsByEmployee]);
 
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();

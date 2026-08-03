@@ -818,9 +818,5 @@ const styles: Record<string, CSSProperties> = {
   historyList: { display: "grid", gap: 8, marginTop: 12 },
   historyRow: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0" },
   sectionTitle: { margin: "20px 0 0", color: "#0f172a", fontSize: 18, fontWeight: 900 },
-  loadingCard: { padding: 24, borderRadius: 22, background: "rgba(255,255,255,0.94)", border: "1px solid rgba(191, 219, 254, 0.9)" },
   toast: { position: "fixed", right: 18, bottom: 18, background: "#0f172a", color: "white", borderRadius: 14, padding: "12px 14px", fontWeight: 800, boxShadow: "0 20px 45px rgba(15,23,42,0.18)" },
-  statusBadge: { display: "inline-flex", padding: "6px 10px", borderRadius: 999, fontSize: 12, fontWeight: 800 },
-  statusActive: { background: "#dcfce7", color: "#166534" },
-  statusInactive: { background: "#e2e8f0", color: "#334155" },
 };

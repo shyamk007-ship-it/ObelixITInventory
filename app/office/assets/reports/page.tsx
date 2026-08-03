@@ -138,7 +138,8 @@ export default function OfficeAssetReportsPage() {
 
     reportData.slice(0, 35).forEach((row, index) => {
       const y = 34 + index * 7;
-      doc.text(keys.map((key) => String(row[key] ?? "")).join(" | "), 14, y);
+      const typedRow = row as Record<string, string | number | null | undefined>;
+      doc.text(keys.map((key) => String(typedRow[key] ?? "")).join(" | "), 14, y);
     });
 
     doc.save(`${selectedReport}.pdf`);
@@ -185,9 +186,12 @@ export default function OfficeAssetReportsPage() {
               ) : (
                 reportData.map((row, index) => (
                   <tr key={`row-${index}`}>
-                    {Object.keys(row).map((key) => (
-                      <td key={`${index}-${key}`} style={styles.td}>{String(row[key] ?? "")}</td>
-                    ))}
+                    {Object.keys(row).map((key) => {
+                      const typedRow = row as Record<string, string | number | null | undefined>;
+                      return (
+                        <td key={`${index}-${key}`} style={styles.td}>{String(typedRow[key] ?? "")}</td>
+                      );
+                    })}
                   </tr>
                 ))
               )}

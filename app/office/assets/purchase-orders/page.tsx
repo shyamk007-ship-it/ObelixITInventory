@@ -199,7 +199,7 @@ export default function OfficeAssetPurchaseOrdersPage() {
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value }: { label: string; value: string | number }) {
   return (
     <div style={styles.kpiCard}>
       <p style={styles.kpiLabel}>{label}</p>
