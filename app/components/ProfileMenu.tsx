@@ -79,9 +79,12 @@ export default function ProfileMenu() {
 
   const menuActions: MenuAction[] = [
     { label: "My Profile", handler: () => closeAndNavigate("/profile?section=profile") },
-    { label: "Account Settings", handler: () => closeAndNavigate("/profile?section=settings") },
+    { label: "Preferences", handler: () => closeAndNavigate("/profile?section=settings") },
     { label: "Notifications", handler: () => closeAndNavigate("/profile?section=notifications") },
+    { label: "Activity Log", handler: () => closeAndNavigate("/profile?section=activity") },
     { label: "Security", handler: () => closeAndNavigate("/profile?section=security") },
+    { label: "API Tokens", handler: () => closeAndNavigate("/profile?section=tokens") },
+    { label: "Help Center", handler: () => closeAndNavigate("/office/knowledge-base") },
   ];
 
   return (

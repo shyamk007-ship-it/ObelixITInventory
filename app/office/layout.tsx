@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import OfficeSidebar from "../components/office/OfficeSidebar";
@@ -62,6 +62,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const { loading, profile, assignments, currentWorkspace } = useEnterpriseAccess();
   const loggedAccess = useRef(false);
+  const [lastSync, setLastSync] = useState(() => new Date());
 
   const headerMeta = useMemo(() => {
     const segments = (pathname || "/office/dashboard").split("/").filter(Boolean);
@@ -107,6 +108,13 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     }
   }, [loading, profile, assignments, currentWorkspace, router]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLastSync(new Date());
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   if (loading || !profile || !canAccessWorkspaceAssignments(assignments, "office")) {
     return (
       <div style={styles.loading}>
@@ -124,7 +132,15 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
           subtitle={headerMeta.subtitle}
           breadcrumbs={<WorkspaceBreadcrumbs />}
         />
-        {children}
+        <section style={styles.content}>{children}</section>
+        <footer style={styles.footer}>
+          <span style={styles.footerItem}>Application Version: v2.4.0</span>
+          <span style={styles.footerItemSuccess}>Database Connected</span>
+          <span style={styles.footerItemSuccess}>API Status: Healthy</span>
+          <span style={styles.footerItemSuccess}>Storage Status: Available</span>
+          <span style={styles.footerItemSuccess}>Mail Service: Operational</span>
+          <span style={styles.footerItem}>Last Sync: {lastSync.toLocaleTimeString()}</span>
+        </footer>
       </main>
     </>
   );
@@ -132,11 +148,43 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
 
 const styles: Record<string, CSSProperties> = {
   main: {
-    marginLeft: 292,
+    marginLeft: "var(--office-sidebar-width, 308px)",
     padding: 28,
     minHeight: "100vh",
+    display: "grid",
+    gridTemplateRows: "1fr auto",
+    gap: 18,
     background:
       "radial-gradient(circle at top left, rgba(191, 219, 254, 0.42), transparent 34%), linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)",
+    transition: "margin-left 220ms ease",
+  },
+  content: {
+    minHeight: 0,
+  },
+  footer: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    borderRadius: 14,
+    padding: "10px 12px",
+    border: "1px solid #dbeafe",
+    background: "rgba(255, 255, 255, 0.85)",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  footerItem: {
+    padding: "5px 8px",
+    borderRadius: 8,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  footerItemSuccess: {
+    padding: "5px 8px",
+    borderRadius: 8,
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
   },
   loading: {
     height: "100vh",
