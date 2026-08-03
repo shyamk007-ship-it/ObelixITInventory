@@ -5,23 +5,14 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import {
   AlertTriangle,
   BadgeCheck,
-  Briefcase,
-  Building2,
-  CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
-  Database,
   HardDrive,
-  Layers3,
-  MonitorCog,
   Package,
   ShieldCheck,
   ShoppingCart,
-  Sparkles,
   Ticket,
-  TrendingUp,
-  User,
   Users,
   Wrench,
 } from "lucide-react";
@@ -42,11 +33,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import WorkspaceBreadcrumbs from "../../components/shared/WorkspaceBreadcrumbs";
-import SearchBar from "../../components/shared/SearchBar";
-import NotificationBell from "../../components/shared/NotificationBell";
-import UserProfile from "../../components/shared/UserProfile";
-import { useEnterpriseAccess } from "../../components/shared/EnterpriseAccessProvider";
 import { OFFICE_ANALYTICS_METRICS, getDashboardInsights, loadOfficeAnalyticsData } from "../../lib/office-analytics";
 import { supabase } from "../../lib/supabase";
 import DashboardWidgetBoundary from "./DashboardWidgetBoundary";
@@ -145,15 +131,9 @@ const formatSafeDate = (value?: string | null) => {
 
 const splitHead = (value: unknown, separator: string) => String(value || "").split(separator)[0] || "";
 
-const splitTail = (value: unknown, separator: string) => String(value || "").split(separator)[1] || "";
-
 export default function OfficeDashboardPage() {
-  const { profile } = useEnterpriseAccess();
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<UiTheme>("light");
-  const [clock, setClock] = useState(() => new Date());
-  const [lastSync, setLastSync] = useState<string>("-");
-  const [dbHealthy, setDbHealthy] = useState<boolean | null>(null);
   const [dataState, setDataState] = useState(() => ({
     insights: getDashboardInsights({ assets: [], assetExtensions: {}, employees: [], tickets: [], maintenance: [], assignments: [], activity: [] }),
     purchaseOrders: [] as PurchaseOrderRow[],
@@ -173,39 +153,30 @@ export default function OfficeDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     let active = true;
 
     const refresh = async () => {
       setLoading(true);
       try {
-        const [analytics, poRes, prRes, vendorRes, dbPing] = await Promise.all([
+        const [analytics, poRes, prRes, vendorRes] = await Promise.all([
           loadOfficeAnalyticsData().catch(() => null),
           supabase.from("asset_purchase_orders").select("id, status, total_amount, vendor_name, expected_delivery_date, created_at").order("created_at", { ascending: false }).limit(120),
           supabase.from("asset_purchase_requests").select("id, status, amount, created_at").order("created_at", { ascending: false }).limit(120),
           supabase.from("asset_vendors").select("id, name, on_time_delivery_rate, rating").limit(100),
-          supabase.from("assets").select("id", { head: true, count: "exact" }).limit(1),
         ]);
 
         if (!active) return;
 
         const fallbackAnalytics = getDashboardInsights({ assets: [], assetExtensions: {}, employees: [], tickets: [], maintenance: [], assignments: [], activity: [] });
 
-        setDbHealthy(!dbPing.error);
         setDataState({
           insights: analytics ? getDashboardInsights(analytics) : fallbackAnalytics,
           purchaseOrders: poRes.error ? [] : ((poRes.data as PurchaseOrderRow[]) || []),
           purchaseRequests: prRes.error ? [] : ((prRes.data as PurchaseRequestRow[]) || []),
           vendors: vendorRes.error ? [] : ((vendorRes.data as VendorRow[]) || []),
         });
-        setLastSync(new Date().toLocaleString());
       } catch {
         if (!active) return;
-        setDbHealthy(false);
         setDataState({
           insights: getDashboardInsights({ assets: [], assetExtensions: {}, employees: [], tickets: [], maintenance: [], assignments: [], activity: [] }),
           purchaseOrders: [],
@@ -240,8 +211,6 @@ export default function OfficeDashboardPage() {
   }, []);
 
   const analytics = dataState.insights;
-  const todayLabel = clock.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const nowLabel = clock.toLocaleTimeString();
 
   const statusSeries = useMemo(
     () => (analytics.maintenanceStatus.length ? analytics.maintenanceStatus : noData),
@@ -251,6 +220,14 @@ export default function OfficeDashboardPage() {
   const maintenanceTrend = useMemo(
     () => {
       const trend = seriesByMonth(analytics.recentActivity.filter((row) => row.kind === "Maintenance").map((row) => row.when));
+      return trend.length ? trend : noData;
+    },
+    [analytics.recentActivity]
+  );
+
+  const ticketTrend = useMemo(
+    () => {
+      const trend = seriesByMonth(analytics.recentActivity.filter((row) => row.kind === "Ticket").map((row) => row.when));
       return trend.length ? trend : noData;
     },
     [analytics.recentActivity]
@@ -422,176 +399,54 @@ export default function OfficeDashboardPage() {
     ];
   }, [analytics, dataState.purchaseOrders, dataState.purchaseRequests]);
 
-  const operationalCards = useMemo(() => {
-    const assignments = analytics.recentActivity.filter((row) => row.kind === "Assignment").slice(0, 5);
-    const additions = analytics.recentActivity.filter((row) => row.kind === "Asset").slice(0, 5);
-    const maintenance = analytics.recentActivity.filter((row) => row.kind === "Maintenance").slice(0, 5);
-    const warranty = analytics.warrantyForecast.slice(0, 5).map((row) => ({ label: row.label, detail: `${row.value} expiring`, when: row.label, kind: "Warranty" }));
+  const operationsWidgets = useMemo(() => {
+    const pendingApprovalsRows = dataState.purchaseRequests
+      .filter((row) => String(row.status || "").toLowerCase().includes("pending"))
+      .slice(0, 6)
+      .map((row) => ({
+        label: `PR #${row.id}`,
+        detail: `${row.status || "Pending"} • $${Math.round(Number(row.amount || 0)).toLocaleString()}`,
+        when: row.created_at || "",
+        kind: "Approval",
+      }));
+
+    const recentPurchasesRows = dataState.purchaseOrders.slice(0, 6).map((row) => ({
+      label: row.vendor_name || `PO #${row.id}`,
+      detail: `${row.status || "Created"} • $${Math.round(Number(row.total_amount || 0)).toLocaleString()}`,
+      when: row.created_at || "",
+      kind: "Purchase",
+    }));
+
+    const openTicketRows = analytics.recentActivity.filter((row) => row.kind === "Ticket").slice(0, 6);
+    const assignedRows = analytics.recentActivity.filter((row) => row.kind === "Assignment").slice(0, 6);
+    const awaitingReturnRows = assignedRows.map((row) => ({
+      ...row,
+      detail: `${row.detail} • Return tracking in progress`,
+    }));
+    const maintenanceRows = analytics.recentActivity.filter((row) => row.kind === "Maintenance").slice(0, 6);
+    const warrantyRows = analytics.warrantyForecast.slice(0, 6).map((row) => ({
+      label: row.label,
+      detail: `${row.value} assets expiring`,
+      when: row.label,
+      kind: "Warranty",
+    }));
+
     return [
-      { title: "Recent Assignments", rows: assignments },
-      { title: "Recent Asset Additions", rows: additions },
-      { title: "Upcoming Maintenance", rows: maintenance },
-      { title: "Upcoming Warranty", rows: warranty },
+      { title: "Recent Activity", rows: analytics.recentActivity.slice(0, 6) },
+      { title: "Pending Approvals", rows: pendingApprovalsRows },
+      { title: "Upcoming Maintenance", rows: maintenanceRows },
+      { title: "Recent Purchases", rows: recentPurchasesRows },
+      { title: "Open Tickets", rows: openTicketRows },
+      { title: "Recently Assigned Assets", rows: assignedRows },
+      { title: "Assets Awaiting Return", rows: awaitingReturnRows },
+      { title: "Warranty Expiring Soon", rows: warrantyRows },
     ];
-  }, [analytics]);
-
-  const supportStats = useMemo(() => {
-    const total = analytics.openTickets + analytics.resolvedTickets;
-    const avgResolution = analytics.resolvedTickets === 0 ? 0 : Math.round((analytics.resolvedTickets / Math.max(1, total)) * 24);
-    const compliance = total === 0 ? 100 : Math.round((analytics.resolvedTickets / total) * 100);
-    const aging = Math.max(0, Math.round((analytics.openTickets / Math.max(1, total)) * 9));
-    return [
-      { label: "Open Tickets", value: analytics.openTickets },
-      { label: "Priority Distribution", value: analytics.criticalIssues },
-      { label: "Ticket Aging", value: `${aging} days` },
-      { label: "Avg Resolution", value: `${avgResolution} hrs` },
-      { label: "SLA Compliance", value: `${compliance}%` },
-    ];
-  }, [analytics]);
-
-  const procurementStats = useMemo(() => {
-    const pending = dataState.purchaseRequests.filter((row) => String(row.status || "").toLowerCase().includes("pending")).length;
-    const approved = dataState.purchaseOrders.filter((row) => String(row.status || "").toLowerCase().includes("approved")).length;
-    const spend = dataState.purchaseOrders.reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
-    const budget = Math.max(spend * 1.25, 1);
-    const utilization = Math.round((spend / budget) * 100);
-    const vendorScore = dataState.vendors.length
-      ? Math.round(dataState.vendors.reduce((sum, row) => sum + Number(row.on_time_delivery_rate || row.rating || 0), 0) / dataState.vendors.length)
-      : 0;
-    return [
-      { label: "Purchase Requests", value: dataState.purchaseRequests.length },
-      { label: "Pending Approval", value: pending },
-      { label: "Approved Orders", value: approved },
-      { label: "Vendor Performance", value: `${vendorScore || 0}%` },
-      { label: "Monthly Spending", value: `$${Math.round(spend).toLocaleString()}` },
-      { label: "Budget Utilization", value: `${utilization}%` },
-    ];
-  }, [dataState.purchaseOrders, dataState.purchaseRequests, dataState.vendors]);
-
-  const inventoryStats = useMemo(() => {
-    const categories = analytics.assetsByCategory;
-    const consumables = categories.find((row) => row.label.toLowerCase().includes("consum"))?.value || 0;
-    const accessories = categories.find((row) => row.label.toLowerCase().includes("access"))?.value || 0;
-    const disposed = statusSeries.find((row) => row.label.toLowerCase().includes("disposed"))?.value || 0;
-    const lowStockAlerts = Math.max(0, Math.round(analytics.availableAssets * 0.12));
-    const newPurchases = getTodayChange(dataState.purchaseOrders.map((row) => row.created_at));
-    return [
-      { label: "Warehouse Stock", value: analytics.availableAssets },
-      { label: "Consumables", value: consumables },
-      { label: "Accessories", value: accessories },
-      { label: "Low Stock Alerts", value: lowStockAlerts },
-      { label: "New Purchases", value: newPurchases },
-      { label: "Disposed Assets", value: disposed },
-    ];
-  }, [analytics, dataState.purchaseOrders, statusSeries]);
-
-  const employeeStats = useMemo(() => {
-    const assignedPeople = analytics.recentActivity
-      .filter((row) => row.kind === "Assignment")
-      .map((row) => splitTail(row.detail, "assigned to "))
-      .filter(Boolean);
-    const uniqueAssigned = new Set(assignedPeople);
-    const noAssets = Math.max(0, analytics.employees - uniqueAssigned.size);
-    const multipleAssets = Math.max(0, Math.round(uniqueAssigned.size * 0.14));
-    const inactive = Math.max(0, Math.round(analytics.employees * 0.06));
-    return [
-      { label: "Department Distribution", value: analytics.assetsByDepartment.length },
-      { label: "Employees Without Assets", value: noAssets },
-      { label: "Employees With Multiple Assets", value: multipleAssets },
-      { label: "Recent Joiners", value: getTodayChange(analytics.recentActivity.filter((row) => row.kind === "Employee").map((row) => row.when)) },
-      { label: "Inactive Employees", value: inactive },
-    ];
-  }, [analytics]);
-
-  const lifecycle = useMemo(() => {
-    const purchased = analytics.totalOfficeAssets;
-    const assigned = analytics.assignedAssets;
-    const maintained = statusSeries.find((row) => row.label.toLowerCase().includes("completed"))?.value || 0;
-    const returned = Math.max(0, Math.round(assigned * 0.21));
-    const disposed = statusSeries.find((row) => row.label.toLowerCase().includes("disposed"))?.value || 0;
-    return [
-      { label: "Purchase", value: purchased, accent: "#2563eb" },
-      { label: "Received", value: purchased, accent: "#0ea5e9" },
-      { label: "Assigned", value: assigned, accent: "#16a34a" },
-      { label: "Maintenance", value: analytics.maintenanceDue + maintained, accent: "#f97316" },
-      { label: "Returned", value: returned, accent: "#8b5cf6" },
-      { label: "Disposed", value: disposed, accent: "#ef4444" },
-    ];
-  }, [analytics, statusSeries]);
-
-  const tasks = useMemo(
-    () => [
-      { label: "Today's Maintenance", value: analytics.maintenanceDue },
-      { label: "Today's Returns", value: Math.max(0, Math.round(analytics.assignedAssets * 0.05)) },
-      { label: "Warranty Expiry", value: analytics.warrantyExpiring },
-      { label: "Pending Approvals", value: dataState.purchaseRequests.filter((row) => String(row.status || "").toLowerCase().includes("pending")).length },
-      { label: "Critical Tickets", value: analytics.criticalIssues },
-    ],
-    [analytics, dataState.purchaseRequests]
-  );
-
-  const aiInsights = useMemo(
-    () => [
-      `${analytics.maintenanceDue} assets require maintenance this week.`,
-      `${analytics.warrantyExpiring} warranties expire this month.`,
-      `${employeeStats.find((row) => row.label === "Employees Without Assets")?.value || 0} employees have no assigned devices.`,
-      `Purchase spending is ${procurementStats.find((row) => row.label === "Budget Utilization")?.value || "0%"} of monthly budget.`,
-      `${dataState.vendors[0]?.name || "Top vendor"} requires delivery risk monitoring based on recent procurement velocity.`,
-    ],
-    [analytics, employeeStats, procurementStats, dataState.vendors]
-  );
-
-  const calendarItems = useMemo(
-    () => [
-      { label: "Maintenance Schedule", detail: `${analytics.maintenanceDue} items in next 30 days` },
-      { label: "Warranty Calendar", detail: `${analytics.warrantyExpiring} upcoming expiries` },
-      { label: "Purchase Delivery", detail: `${dataState.purchaseOrders.filter((row) => !!row.expected_delivery_date).length} tracked deliveries` },
-      { label: "Employee Leave", detail: `${Math.max(1, Math.round(analytics.employees * 0.04))} planned leaves` },
-      { label: "Asset Returns", detail: `${Math.max(1, Math.round(analytics.assignedAssets * 0.09))} expected returns` },
-    ],
-    [analytics, dataState.purchaseOrders]
-  );
-
-  const health = useMemo(
-    () => [
-      { label: "Network Status", value: "Healthy", ok: true },
-      { label: "Server Status", value: "Operational", ok: true },
-      { label: "Backup Status", value: "Up to Date", ok: true },
-      { label: "Database Status", value: dbHealthy === false ? "Unavailable" : dbHealthy === true ? "Connected" : "Checking", ok: dbHealthy !== false },
-      { label: "Email Service", value: "Operational", ok: true },
-      { label: "Storage Usage", value: `${safePercent(analytics.assignedAssets, Math.max(1, analytics.totalOfficeAssets))}% utilized`, ok: true },
-    ],
-    [analytics, dbHealthy]
-  );
+  }, [analytics.recentActivity, analytics.warrantyForecast, dataState.purchaseOrders, dataState.purchaseRequests]);
 
   const sectionTone = theme === "dark" ? dark : light;
 
   return (
     <div style={{ ...styles.page, ...sectionTone.page }}>
-      <DashboardWidgetBoundary widgetName="Executive Header">
-      <section style={{ ...styles.executiveHeader, ...sectionTone.executiveHeader }}>
-        <div style={styles.executiveLeft}>
-          <WorkspaceBreadcrumbs />
-          <h2 style={{ ...styles.headline, ...sectionTone.textStrong }}>Office Operations Executive BI Dashboard</h2>
-          <p style={{ ...styles.welcome, ...sectionTone.textMuted }}>
-            Welcome back {profile?.full_name || "Executive"}. Command center refreshed with real-time Office intelligence.
-          </p>
-          <div style={styles.datetimeWrap}>
-            <span style={{ ...styles.pill, ...sectionTone.pill }}><CalendarDays size={14} /> {todayLabel}</span>
-            <span style={{ ...styles.pill, ...sectionTone.pill }}><Clock3 size={14} /> {nowLabel}</span>
-            <span style={{ ...styles.pill, ...(dbHealthy ? styles.pillOk : styles.pillWarn) }}><Database size={14} /> {dbHealthy ? "Database Connected" : "Database Checking"}</span>
-          </div>
-        </div>
-        <div style={styles.executiveRight}>
-          <SearchBar placeholder="Global search across assets, employees, tickets, maintenance, vendors and reports" />
-          <div style={styles.executiveIcons}>
-            <NotificationBell />
-            <UserProfile />
-          </div>
-        </div>
-      </section>
-      </DashboardWidgetBoundary>
-
       <DashboardWidgetBoundary widgetName="Quick Action Bar">
       <section style={styles.quickActionBar}>
         {[
@@ -600,7 +455,6 @@ export default function OfficeDashboardPage() {
           { label: "Add Employee", href: "/office/employees" },
           { label: "Create Ticket", href: "/office/tickets" },
           { label: "Purchase Request", href: "/office/purchase-requests" },
-          { label: "Maintenance", href: "/office/maintenance" },
           { label: "Export Report", href: "/office/reports/export" },
         ].map((action) => (
           <Link key={action.label} href={action.href} style={{ ...styles.quickButton, ...sectionTone.quickButton }}>
@@ -612,6 +466,7 @@ export default function OfficeDashboardPage() {
 
       <DashboardWidgetBoundary widgetName="Executive KPI Cards">
       <section style={{ ...styles.kpiStickyWrap, ...sectionTone.kpiStickyWrap }}>
+        <SectionTitle title="Executive KPI" subtitle="Core operational KPIs for daily office IT execution." />
         <div style={styles.kpiGrid}>
           {loading
             ? Array.from({ length: 12 }).map((_, idx) => <SkeletonCard key={`sk-${idx}`} />)
@@ -622,7 +477,7 @@ export default function OfficeDashboardPage() {
 
       <DashboardWidgetBoundary widgetName="Analytics Section">
       <section style={styles.section}>
-        <SectionTitle title="Analytics Section" subtitle="Interactive analytics for executive planning and drill-down." />
+        <SectionTitle title="Analytics" subtitle="Charts-only analytics for asset, support, and procurement trends." />
         <div style={styles.chartGrid}>
           <ChartPanel title="Asset Growth" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetGrowth.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
@@ -636,7 +491,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Assets by Category" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByCategory.length > 0}>
+          <ChartPanel title="Asset Categories" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByCategory.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={analytics.assetsByCategory.length ? analytics.assetsByCategory : noData} dataKey="value" nameKey="label" innerRadius={48} outerRadius={90}>
@@ -650,7 +505,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Assets by Department" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByDepartment.length > 0}>
+          <ChartPanel title="Asset Distribution by Department" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByDepartment.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={analytics.assetsByDepartment.length ? analytics.assetsByDepartment : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -662,41 +517,27 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Asset Status" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={statusSeries !== noData}>
+          <ChartPanel title="Ticket Trend" href={OFFICE_ANALYTICS_METRICS["open-tickets"].path} hasData={ticketTrend !== noData}>
             <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie data={statusSeries} dataKey="value" nameKey="label" innerRadius={48} outerRadius={90}>
-                  {statusSeries.map((entry, index) => (
-                    <Cell key={`status-${entry.label}-${index}`} fill={palette[index % palette.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartPanel>
-
-          <ChartPanel title="Monthly Assignment Trend" href={OFFICE_ANALYTICS_METRICS["assigned-assets"].path} hasData={analytics.monthlyAssignments.length > 0}>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={analytics.monthlyAssignments.length ? analytics.monthlyAssignments : noData}>
+              <LineChart data={ticketTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
                 <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
                 <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
                 <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#16a34a" fill="#bbf7d0" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartPanel>
-
-          <ChartPanel title="Warranty Timeline" href={OFFICE_ANALYTICS_METRICS["warranty-expiring"].path} hasData={analytics.warrantyForecast.length > 0}>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={analytics.warrantyForecast.length ? analytics.warrantyForecast : noData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
-                <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
-                <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={3} dot={{ r: 3 }} />
               </LineChart>
+            </ResponsiveContainer>
+          </ChartPanel>
+
+          <ChartPanel title="Purchase Trend" href="/office/purchase-orders" hasData={purchaseTrend.length > 0}>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={purchaseTrend.length ? purchaseTrend : noData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
+                <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
+                <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
+                <Tooltip />
+                <Bar dataKey="value" fill="#0891b2" radius={[10, 10, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
 
@@ -712,15 +553,15 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Purchase Trend" href="/office/purchase-orders" hasData={purchaseTrend.length > 0}>
+          <ChartPanel title="Warranty Expiry Timeline" href={OFFICE_ANALYTICS_METRICS["warranty-expiring"].path} hasData={analytics.warrantyForecast.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={purchaseTrend.length ? purchaseTrend : noData}>
+              <LineChart data={analytics.warrantyForecast.length ? analytics.warrantyForecast : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
                 <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
                 <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#0891b2" radius={[10, 10, 0, 0]} />
-              </BarChart>
+                <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 3 }} />
+              </LineChart>
             </ResponsiveContainer>
           </ChartPanel>
 
@@ -737,85 +578,17 @@ export default function OfficeDashboardPage() {
               </PieChart>
             </ResponsiveContainer>
           </ChartPanel>
-
-          <ChartPanel title="Department Asset Allocation" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByDepartment.length > 0}>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={analytics.assetsByDepartment.length ? analytics.assetsByDepartment : noData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
-                <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
-                <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#1d4ed8" radius={[10, 10, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartPanel>
         </div>
       </section>
       </DashboardWidgetBoundary>
 
-      <DashboardWidgetBoundary widgetName="Operational Status">
+      <DashboardWidgetBoundary widgetName="Operations Section">
       <section style={styles.section}>
-        <SectionTitle title="Operational Status" subtitle="Immediate operational movement across assets and maintenance." />
+        <SectionTitle title="Operations" subtitle="Live operational widgets for approvals, assignments, purchases, and service work." />
         <div style={styles.grid4}>
-          {operationalCards.map((panel) => (
+          {operationsWidgets.map((panel) => (
             <MiniListCard key={panel.title} title={panel.title} rows={panel.rows} theme={theme} />
           ))}
-        </div>
-      </section>
-      </DashboardWidgetBoundary>
-
-      <DashboardWidgetBoundary widgetName="Support Procurement Inventory">
-      <section style={styles.grid3}>
-        <MetricListCard title="Support Center" icon={<Ticket size={17} />} metrics={supportStats} theme={theme} />
-        <MetricListCard title="Procurement Overview" icon={<ShoppingCart size={17} />} metrics={procurementStats} theme={theme} />
-        <MetricListCard title="Inventory Overview" icon={<Layers3 size={17} />} metrics={inventoryStats} theme={theme} />
-      </section>
-      </DashboardWidgetBoundary>
-
-      <DashboardWidgetBoundary widgetName="Employee Lifecycle Activity">
-      <section style={styles.grid3}>
-        <MetricListCard title="Employee Overview" icon={<Users size={17} />} metrics={employeeStats} theme={theme} />
-        <TimelineCard title="Asset Lifecycle" stages={lifecycle} theme={theme} />
-        <MiniListCard title="Recent Activity Feed" rows={analytics.recentActivity.slice(0, 7)} theme={theme} />
-      </section>
-      </DashboardWidgetBoundary>
-
-      <DashboardWidgetBoundary widgetName="Tasks Insights Calendar">
-      <section style={styles.grid3}>
-        <MetricListCard title="Upcoming Tasks" icon={<ClipboardCheck size={17} />} metrics={tasks} theme={theme} />
-        <InsightCard title="AI Insights" insights={aiInsights} theme={theme} />
-        <MetricListCard title="Calendar Widget" icon={<CalendarDays size={17} />} metrics={calendarItems.map((item) => ({ label: item.label, value: item.detail }))} theme={theme} />
-      </section>
-      </DashboardWidgetBoundary>
-
-      <DashboardWidgetBoundary widgetName="Health Reports Footer">
-      <section style={styles.grid3}>
-        <MetricListCard title="Office Health Dashboard" icon={<MonitorCog size={17} />} metrics={health.map((item) => ({ label: item.label, value: item.value }))} theme={theme} />
-        <div style={{ ...styles.card, ...sectionTone.card }}>
-          <div style={styles.cardTitleRow}>
-            <h3 style={{ ...styles.cardTitle, ...sectionTone.textStrong }}>Reports Shortcut</h3>
-            <span style={{ ...styles.kpiBadge, ...sectionTone.pill }}>Rapid Access</span>
-          </div>
-          <div style={styles.linkGrid}>
-            <Link href="/office/reports" style={{ ...styles.shortcutLink, ...sectionTone.shortcutLink }}>Monthly Reports</Link>
-            <Link href="/office/reports/export" style={{ ...styles.shortcutLink, ...sectionTone.shortcutLink }}>Export PDF</Link>
-            <Link href="/office/reports/export" style={{ ...styles.shortcutLink, ...sectionTone.shortcutLink }}>Export Excel</Link>
-            <Link href="/office/analytics" style={{ ...styles.shortcutLink, ...sectionTone.shortcutLink }}>Power BI View</Link>
-            <Link href="/office/reports/audit-logs" style={{ ...styles.shortcutLink, ...sectionTone.shortcutLink }}>Audit Reports</Link>
-          </div>
-        </div>
-        <div style={{ ...styles.card, ...sectionTone.card }}>
-          <div style={styles.cardTitleRow}>
-            <h3 style={{ ...styles.cardTitle, ...sectionTone.textStrong }}>Executive Footer</h3>
-            <span style={{ ...styles.kpiBadge, ...sectionTone.pill }}>Live</span>
-          </div>
-          <div style={styles.footerGrid}>
-            <FooterItem icon={<Sparkles size={14} />} label="Application Version" value="v2.4.0" />
-            <FooterItem icon={<Database size={14} />} label="Database" value={dbHealthy ? "Connected" : "Checking"} />
-            <FooterItem icon={<Clock3 size={14} />} label="Last Sync" value={lastSync} />
-            <FooterItem icon={<User size={14} />} label="Current User" value={profile?.full_name || "Executive"} />
-            <FooterItem icon={<Building2 size={14} />} label="Environment" value={process.env.NODE_ENV || "production"} />
-          </div>
         </div>
       </section>
       </DashboardWidgetBoundary>
@@ -887,80 +660,6 @@ function MiniListCard({ title, rows, theme }: { title: string; rows: Array<{ lab
   );
 }
 
-function MetricListCard({ title, metrics, icon, theme }: { title: string; metrics: Array<{ label: string; value: string | number }>; icon: ReactNode; theme: UiTheme }) {
-  return (
-    <article style={{ ...styles.card, ...(theme === "dark" ? dark.card : light.card) }}>
-      <div style={styles.cardTitleRow}>
-        <h3 style={{ ...styles.cardTitle, ...(theme === "dark" ? dark.textStrong : light.textStrong), display: "flex", alignItems: "center", gap: 8 }}>
-          {icon}
-          {title}
-        </h3>
-      </div>
-      <div style={styles.metricRows}>
-        {metrics.map((item) => (
-          <div key={item.label} style={{ ...styles.metricRow, ...(theme === "dark" ? dark.rowItem : light.rowItem) }}>
-            <span style={{ color: theme === "dark" ? "#9db0c2" : "#475569", fontSize: 13 }}>{item.label}</span>
-            <strong style={{ color: theme === "dark" ? "#f5f7fb" : "#0f172a" }}>{item.value}</strong>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function TimelineCard({ title, stages, theme }: { title: string; stages: Array<{ label: string; value: number; accent: string }>; theme: UiTheme }) {
-  return (
-    <article style={{ ...styles.card, ...(theme === "dark" ? dark.card : light.card) }}>
-      <div style={styles.cardTitleRow}>
-        <h3 style={{ ...styles.cardTitle, ...(theme === "dark" ? dark.textStrong : light.textStrong), display: "flex", alignItems: "center", gap: 8 }}>
-          <TrendingUp size={17} />
-          {title}
-        </h3>
-      </div>
-      <div style={styles.timelineWrap}>
-        {stages.map((stage, index) => (
-          <div key={stage.label} style={styles.timelineNode}>
-            <span style={{ ...styles.timelineDot, background: stage.accent }} />
-            <strong style={{ color: theme === "dark" ? "#f5f7fb" : "#0f172a", fontSize: 13 }}>{stage.label}</strong>
-            <span style={{ color: theme === "dark" ? "#9db0c2" : "#64748b", fontSize: 12 }}>{stage.value}</span>
-            {index < stages.length - 1 && <span style={{ ...styles.timelineLine, background: theme === "dark" ? "#2b3d52" : "#dbeafe" }} />}
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function InsightCard({ title, insights, theme }: { title: string; insights: string[]; theme: UiTheme }) {
-  return (
-    <article style={{ ...styles.card, ...(theme === "dark" ? dark.card : light.card) }}>
-      <div style={styles.cardTitleRow}>
-        <h3 style={{ ...styles.cardTitle, ...(theme === "dark" ? dark.textStrong : light.textStrong), display: "flex", alignItems: "center", gap: 8 }}>
-          <Sparkles size={17} />
-          {title}
-        </h3>
-      </div>
-      <div style={styles.insightList}>
-        {insights.map((item) => (
-          <div key={item} style={{ ...styles.insightItem, ...(theme === "dark" ? dark.rowItem : light.rowItem) }}>
-            <span style={{ ...styles.insightDot, background: theme === "dark" ? "#22d3ee" : "#2563eb" }} />
-            <p style={{ margin: 0, color: theme === "dark" ? "#c5d2df" : "#334155", fontSize: 13 }}>{item}</p>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function FooterItem({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div style={styles.footerItem}>
-      <span style={styles.footerLabel}>{icon} {label}</span>
-      <strong style={styles.footerValue}>{value}</strong>
-    </div>
-  );
-}
-
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={styles.sectionHeading}>
@@ -981,59 +680,27 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
     alignItems: "start",
   },
-  executiveHeader: {
-    gridColumn: "1 / -1",
-    position: "sticky",
-    top: 8,
-    zIndex: 40,
-    borderRadius: 20,
-    padding: 16,
-    display: "grid",
-    gridTemplateColumns: "1.4fr 1fr",
-    gap: 12,
-    border: "1px solid",
-    backdropFilter: "blur(6px)",
-  },
-  executiveLeft: { display: "grid", gap: 8 },
-  executiveRight: { display: "grid", gap: 10, alignContent: "start" },
-  executiveIcons: { display: "flex", justifyContent: "flex-end", gap: 8 },
-  headline: { margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em" },
-  welcome: { margin: 0, fontSize: 13, lineHeight: 1.6 },
-  datetimeWrap: { display: "flex", flexWrap: "wrap", gap: 8 },
-  pill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 999,
-    padding: "6px 10px",
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 800,
-  },
-  pillOk: { background: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" },
-  pillWarn: { background: "#fef9c3", borderColor: "#fde68a", color: "#854d0e" },
   quickActionBar: {
     gridColumn: "1 / -1",
     display: "flex",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
   quickButton: {
     textDecoration: "none",
-    padding: "10px 14px",
+    padding: "8px 12px",
     borderRadius: 12,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 800,
     border: "1px solid",
   },
   kpiStickyWrap: {
     gridColumn: "1 / -1",
-    position: "sticky",
-    top: 128,
-    zIndex: 30,
-    padding: 8,
+    padding: 10,
     borderRadius: 16,
     border: "1px solid",
+    display: "grid",
+    gap: 10,
   },
   kpiGrid: {
     display: "grid",
@@ -1078,7 +745,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
   },
   grid4: { gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 },
-  grid3: { gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 },
   card: {
     borderRadius: 16,
     padding: 14,
@@ -1110,57 +776,6 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
   },
   when: { whiteSpace: "nowrap", color: "#0284c7", fontSize: 11, fontWeight: 800 },
-  metricRows: { display: "grid", gap: 8 },
-  metricRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 10,
-    border: "1px solid",
-    padding: "10px 10px",
-  },
-  timelineWrap: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  timelineNode: {
-    position: "relative",
-    minWidth: 96,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    padding: "10px 10px",
-    display: "grid",
-    gap: 4,
-  },
-  timelineDot: { width: 10, height: 10, borderRadius: 999 },
-  timelineLine: {
-    position: "absolute",
-    top: "50%",
-    right: -10,
-    width: 10,
-    height: 2,
-  },
-  insightList: { display: "grid", gap: 8 },
-  insightItem: {
-    border: "1px solid",
-    borderRadius: 10,
-    padding: "10px 10px",
-    display: "flex",
-    gap: 8,
-    alignItems: "flex-start",
-  },
-  insightDot: { width: 8, height: 8, borderRadius: 999, marginTop: 5 },
-  linkGrid: { display: "grid", gap: 8 },
-  shortcutLink: {
-    textDecoration: "none",
-    borderRadius: 10,
-    border: "1px solid",
-    padding: "10px 11px",
-    fontWeight: 700,
-    fontSize: 13,
-  },
   chartEmpty: {
     minHeight: 250,
     display: "grid",
@@ -1172,19 +787,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 12,
     background: "#f8fafc",
   },
-  footerGrid: { display: "grid", gap: 8 },
-  footerItem: {
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    padding: "10px 10px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  footerLabel: { color: "#334155", fontSize: 12, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 },
-  footerValue: { color: "#0f172a", fontSize: 12 },
   skeletonCard: {
     borderRadius: 14,
     height: 146,
@@ -1196,28 +798,22 @@ const styles: Record<string, CSSProperties> = {
 
 const light = {
   page: { background: "transparent" },
-  executiveHeader: { background: "#ffffff", borderColor: "#e2e8f0" },
   textStrong: { color: "#0f172a" },
-  textMuted: { color: "#64748b" },
   pill: { background: "#f8fafc", borderColor: "#e2e8f0", color: "#334155" },
   quickButton: { color: "#0f172a", background: "#ffffff", borderColor: "#e2e8f0" },
   kpiStickyWrap: { background: "#ffffff", borderColor: "#e2e8f0" },
   kpiCard: { background: "white", borderColor: "#e2e8f0", boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)" },
   card: { background: "#ffffff", borderColor: "#e2e8f0", boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)" },
   rowItem: { background: "#f8fafc", borderColor: "#e2e8f0" },
-  shortcutLink: { background: "#f8fafc", borderColor: "#e2e8f0", color: "#0f172a" },
 };
 
 const dark = {
   page: { background: "transparent" },
-  executiveHeader: { background: "#0f172a", borderColor: "#1e293b" },
   textStrong: { color: "#f5f7fb" },
-  textMuted: { color: "#9db0c2" },
   pill: { background: "#1e293b", borderColor: "#334155", color: "#e2e8f0" },
   quickButton: { color: "#dce7f4", background: "#1e293b", borderColor: "#334155" },
   kpiStickyWrap: { background: "#0f172a", borderColor: "#334155" },
   kpiCard: { background: "#111827", borderColor: "#334155", boxShadow: "0 10px 22px rgba(2, 6, 23, 0.28)" },
   card: { background: "#111827", borderColor: "#334155", boxShadow: "0 10px 22px rgba(2, 6, 23, 0.28)" },
   rowItem: { background: "#1e293b", borderColor: "#334155" },
-  shortcutLink: { background: "#1e293b", borderColor: "#334155", color: "#dce7f4" },
 };
