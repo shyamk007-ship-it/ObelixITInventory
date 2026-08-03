@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { Building2 } from "lucide-react";
 import NotificationBell from "../shared/NotificationBell";
 import UserProfile from "../shared/UserProfile";
 import SearchBar from "../shared/SearchBar";
@@ -16,7 +17,10 @@ export default function OfficeHeader({ title, subtitle, breadcrumbs }: OfficeHea
     <header style={styles.wrap}>
       <div style={styles.left}>
         {breadcrumbs}
-        <p style={styles.eyebrow}>Office Workspace</p>
+        <p style={styles.eyebrow}>
+          <Building2 size={14} strokeWidth={2.2} />
+          <span>Office Operations</span>
+        </p>
         <h1 style={styles.title}>{title}</h1>
         <p style={styles.subtitle}>{subtitle}</p>
       </div>
@@ -58,6 +62,9 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.18em",
     fontSize: 11,
     fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
   },
   title: {
     margin: 0,

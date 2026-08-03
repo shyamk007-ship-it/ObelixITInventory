@@ -7,6 +7,7 @@ import { useEnterpriseAccess } from "./components/shared/EnterpriseAccessProvide
 import PortalHeader from "./components/shared/PortalHeader";
 import WorkspaceCard from "./components/WorkspaceCard";
 import { getAssignmentLandingRoute, getWorkspaceLabel } from "./lib/rbac";
+import { Building2, Ship } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
@@ -55,8 +56,8 @@ export default function Home() {
       <div style={styles.grid}>
         {canSeeOffice && (
           <WorkspaceCard
-            icon="🏢"
-            title="OFFICE OPERATIONS"
+            icon={<Building2 size={28} strokeWidth={2.2} />}
+            title="Office Operations"
             description="Manage office assets, employees, tickets and administration."
             href="/office/dashboard"
             ctaLabel="Open Office Workspace"
@@ -65,8 +66,8 @@ export default function Home() {
 
         {canSeeFleet && (
           <WorkspaceCard
-            icon="🚢"
-            title="FLEET OPERATIONS"
+            icon={<Ship size={28} strokeWidth={2.2} />}
+            title="Fleet Operations"
             description="Manage vessels, fleet assets, network and onboard IT."
             href="/fleet/dashboard"
             ctaLabel="Open Fleet Workspace"
@@ -81,7 +82,7 @@ export default function Home() {
             {accessibleVessels.map((vessel) => (
               <WorkspaceCard
                 key={vessel.id}
-                icon="🚢"
+                icon={<Ship size={28} strokeWidth={2.2} />}
                 title={vessel.label || `Vessel ${vessel.id}`}
                 description="Open your assigned vessel workspace."
                 href={getAssignmentLandingRoute(assignments.find((assignment) => String(assignment.vessel_id) === String(vessel.id)) ?? null)}

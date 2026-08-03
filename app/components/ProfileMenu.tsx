@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { Building2, Ship } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { buildAuditDescription, createAuditLog } from "../lib/audit";
@@ -74,6 +75,7 @@ export default function ProfileMenu() {
 
   const currentRole = activeAssignment ? roleLabel[activeAssignment.role] : "Unknown";
   const currentWorkspace = activeAssignment ? getWorkspaceLabel(activeAssignment.workspace) : "Company Portal";
+  const WorkspaceIcon = activeAssignment?.workspace === "fleet" ? Ship : Building2;
 
   const menuActions: MenuAction[] = [
     { label: "My Profile", handler: () => closeAndNavigate("/profile?section=profile") },
@@ -98,7 +100,13 @@ export default function ProfileMenu() {
           <div style={styles.profileHeader}>
             <span style={styles.profileName}>{profile?.full_name || "User"}</span>
             <span style={styles.roleBadge}>{currentRole}</span>
-            <span style={styles.workspaceBadge}>{currentWorkspace}</span>
+            <div style={styles.workspaceSection}>
+              <span style={styles.workspaceLabel}>Current Workspace</span>
+              <span style={styles.workspaceBadge}>
+                <WorkspaceIcon size={14} strokeWidth={2.2} />
+                {currentWorkspace}
+              </span>
+            </div>
           </div>
 
           {menuActions.map((item) => (
@@ -196,6 +204,8 @@ const styles: Record<string, CSSProperties> = {
   profileHeader: {
     padding: "16px 16px 10px",
     borderBottom: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 8,
   },
   profileName: {
     display: "block",
@@ -216,12 +226,26 @@ const styles: Record<string, CSSProperties> = {
   },
   workspaceBadge: {
     display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    width: "fit-content",
     padding: "6px 10px",
     borderRadius: 999,
     background: "#f8fafc",
     color: "#334155",
     fontSize: 12,
     fontWeight: 700,
+  },
+  workspaceSection: {
+    display: "grid",
+    gap: 6,
+  },
+  workspaceLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
   switchLabel: {
     padding: "10px 16px 6px",

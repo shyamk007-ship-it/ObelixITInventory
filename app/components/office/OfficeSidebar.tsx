@@ -3,41 +3,47 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
+import { ArrowRightLeft, Building2, FileText, LayoutDashboard, Package, Radio, Settings2, Ticket, Users, Wrench, type LucideIcon } from "lucide-react";
 
 const sections = [
   {
     title: "Dashboard",
-    links: [{ href: "/office/dashboard", label: "Executive Dashboard" }],
+    icon: LayoutDashboard,
+    links: [{ href: "/office/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     title: "Asset Management",
+    icon: Package,
     links: [
-      { href: "/office/assets", label: "Assets" },
-      { href: "/office/assets/assignments", label: "Assignments" },
-      { href: "/office/assets/maintenance", label: "Maintenance" },
-      { href: "/office/assets/warranty", label: "Warranty" },
-      { href: "/office/assets/reports", label: "Asset Reports" },
+      { href: "/office/assets", label: "Assets", icon: Package },
+      { href: "/office/assignments", label: "Assignments", icon: ArrowRightLeft },
+      { href: "/office/maintenance", label: "Maintenance", icon: Wrench },
+      { href: "/office/assets/warranty", label: "Warranty", icon: Settings2 },
+      { href: "/office/assets/reports", label: "Asset Reports", icon: FileText },
     ],
   },
   {
     title: "People",
+    icon: Users,
     links: [
-      { href: "/office/employees", label: "Employees" },
-      { href: "/office/users", label: "Users" },
+      { href: "/office/employees", label: "Employees", icon: Users },
+      { href: "/office/users", label: "Users", icon: Users },
     ],
   },
   {
     title: "Support",
+    icon: Ticket,
     links: [
-      { href: "/office/tickets", label: "Tickets" },
-      { href: "/office/reports", label: "Reports" },
-      { href: "/office/activity", label: "Activity Logs" },
-      { href: "/office/network", label: "Network Monitoring" },
+      { href: "/office/tickets", label: "Tickets", icon: Ticket },
+      { href: "/office/reports", label: "Reports", icon: FileText },
+      { href: "/office/activity", label: "Activity Logs", icon: FileText },
+      { href: "/office/network", label: "Network Monitoring", icon: Radio },
     ],
   },
   {
     title: "Administration",
-    links: [{ href: "/office/settings", label: "Settings" }],
+    icon: Settings2,
+    links: [{ href: "/office/settings", label: "Settings", icon: Settings2 }],
   },
 ];
 
@@ -47,18 +53,24 @@ export default function OfficeSidebar() {
   return (
     <aside style={styles.sidebar}>
       <div style={styles.brandCard}>
-        <div>
-          <p style={styles.eyebrow}>Office Workspace</p>
-          <h2 style={styles.logo}>Enterprise IT Portal</h2>
-          <p style={styles.description}>Office assets, support, employees, and administration in one workspace.</p>
+        <div style={styles.brandHeader}>
+          <Building2 size={22} strokeWidth={2.2} />
+          <div>
+            <p style={styles.eyebrow}>Office Operations</p>
+            <h2 style={styles.logo}>Enterprise IT Portal</h2>
+          </div>
         </div>
-        <span style={styles.badge}>Office only</span>
+        <p style={styles.description}>Office assets, support, employees, and administration in one workspace.</p>
+        <span style={styles.badge}>Current Workspace</span>
       </div>
 
       <nav style={styles.nav} aria-label="Office navigation">
         {sections.map((section) => (
           <div key={section.title} style={styles.section}>
-            <p style={styles.sectionTitle}>{section.title}</p>
+            <div style={styles.sectionTitleRow}>
+              <section.icon size={16} strokeWidth={2.2} />
+              <p style={styles.sectionTitle}>{section.title}</p>
+            </div>
             <div style={styles.sectionLinks}>
               {section.links.map((link) => {
                 const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
@@ -72,6 +84,7 @@ export default function OfficeSidebar() {
                       ...(active ? styles.linkActive : {}),
                     }}
                   >
+                    <link.icon size={16} strokeWidth={2.2} />
                     {link.label}
                   </Link>
                 );
@@ -112,6 +125,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255, 255, 255, 0.10)",
     backdropFilter: "blur(16px)",
     display: "grid",
+    gap: 12,
+  },
+  brandHeader: {
+    display: "flex",
+    alignItems: "flex-start",
     gap: 12,
   },
   eyebrow: {
@@ -167,6 +185,11 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.16em",
     fontWeight: 800,
   },
+  sectionTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
   sectionLinks: {
     display: "grid",
     gap: 8,
@@ -192,6 +215,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 700,
     transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   },
   linkActive: {
     background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",

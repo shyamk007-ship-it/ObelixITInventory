@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { Clock3, FileText, Package, Radio, Ticket, Users, Wrench } from "lucide-react";
 
 interface OfficeWidgetsProps {
   assetOverview: string;
@@ -10,12 +11,12 @@ interface OfficeWidgetsProps {
 }
 
 const widgetRows = [
-  { key: "assetOverview", label: "Asset Overview" },
-  { key: "employeeSummary", label: "Employee Summary" },
-  { key: "supportTickets", label: "Support Tickets" },
-  { key: "networkStatus", label: "Office Network Status" },
-  { key: "recentActivity", label: "Recent Activity" },
-  { key: "upcomingMaintenance", label: "Upcoming Maintenance" },
+  { key: "assetOverview", label: "Asset Overview", icon: Package },
+  { key: "employeeSummary", label: "Employee Summary", icon: Users },
+  { key: "supportTickets", label: "Support Tickets", icon: Ticket },
+  { key: "networkStatus", label: "Office Network Status", icon: Radio },
+  { key: "recentActivity", label: "Recent Activity", icon: Clock3 },
+  { key: "upcomingMaintenance", label: "Upcoming Maintenance", icon: Wrench },
 ] as const;
 
 export default function OfficeWidgets(props: OfficeWidgetsProps) {
@@ -23,6 +24,9 @@ export default function OfficeWidgets(props: OfficeWidgetsProps) {
     <section style={styles.grid}>
       {widgetRows.map((widget) => (
         <article key={widget.key} style={styles.card}>
+          <div style={styles.iconWrap}>
+            <widget.icon size={18} strokeWidth={2.2} />
+          </div>
           <h3 style={styles.title}>{widget.label}</h3>
           <p style={styles.value}>{props[widget.key]}</p>
         </article>
@@ -40,9 +44,21 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: "white",
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
+    border: "1px solid #dbeafe",
+    borderRadius: 18,
     padding: 16,
+    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.06)",
+    display: "grid",
+    gap: 8,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    background: "#eff6ff",
+    color: "#1d4ed8",
   },
   title: {
     margin: 0,
@@ -53,7 +69,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.06em",
   },
   value: {
-    margin: "8px 0 0",
+    margin: 0,
     color: "#0f172a",
     fontSize: 16,
     fontWeight: 700,

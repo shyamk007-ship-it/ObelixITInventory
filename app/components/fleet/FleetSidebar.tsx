@@ -3,21 +3,21 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ArrowRightLeft, FileText, LayoutDashboard, Package, Settings2, Ship, Ticket, Users, Wrench } from "lucide-react";
 import { useEnterpriseAccess } from "../shared/EnterpriseAccessProvider";
 import { roleLabel } from "../../lib/rbac";
 
 const links = [
-  { href: "/fleet/dashboard", label: "Dashboard" },
-  { href: "/fleet/vessels", label: "Vessels" },
-  { href: "/fleet/assets", label: "Fleet Assets" },
-  { href: "/fleet/crew", label: "Crew" },
-  { href: "/fleet/assignments", label: "Assignments" },
-  { href: "/fleet/tickets", label: "Tickets" },
-  { href: "/fleet/maintenance", label: "Maintenance" },
-  { href: "/fleet/certificates", label: "Certificates" },
-  { href: "/fleet/reports", label: "Reports" },
-  { href: "/fleet/users", label: "Users" },
-  { href: "/fleet/settings", label: "Settings" },
+  { href: "/fleet/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/fleet/vessels", label: "Vessels", icon: Ship },
+  { href: "/fleet/assets", label: "Fleet Assets", icon: Package },
+  { href: "/fleet/crew", label: "Crew", icon: Users },
+  { href: "/fleet/assignments", label: "Assignments", icon: ArrowRightLeft },
+  { href: "/fleet/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/fleet/incidents", label: "Incidents", icon: Ticket },
+  { href: "/fleet/documents", label: "Documents", icon: FileText },
+  { href: "/fleet/reports", label: "Reports", icon: FileText },
+  { href: "/fleet/settings", label: "Settings", icon: Settings2 },
 ];
 
 export default function FleetSidebar() {
@@ -30,7 +30,13 @@ export default function FleetSidebar() {
   return (
     <aside style={styles.sidebar}>
       <div style={styles.brand}>
-        <h2 style={styles.logo}>IT Management</h2>
+        <div style={styles.brandHeader}>
+          <Ship size={22} strokeWidth={2.2} />
+          <div>
+            <p style={styles.eyebrow}>Fleet Operations</p>
+            <h2 style={styles.logo}>IT Management</h2>
+          </div>
+        </div>
         <span style={styles.badge}>{activeAssignment ? roleLabel[activeAssignment.role] : "Fleet Workspace"}</span>
       </div>
 
@@ -47,6 +53,7 @@ export default function FleetSidebar() {
                 ...(active ? styles.linkActive : {}),
               }}
             >
+              <link.icon size={16} strokeWidth={2.2} />
               {link.label}
             </Link>
           );
@@ -78,15 +85,30 @@ const styles: Record<string, CSSProperties> = {
   brand: {
     flexShrink: 0,
     marginBottom: 20,
+    display: "grid",
+    gap: 12,
+  },
+  brandHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  eyebrow: {
+    margin: 0,
+    fontSize: 11,
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    color: "#93c5fd",
+    fontWeight: 800,
   },
   logo: {
-    margin: 0,
-    color: "#38bdf8",
-    fontSize: 24,
+    margin: "6px 0 0",
+    color: "#ffffff",
+    fontSize: 22,
   },
   badge: {
     display: "inline-flex",
-    marginTop: 12,
+    width: "fit-content",
     padding: "6px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
@@ -116,13 +138,19 @@ const styles: Record<string, CSSProperties> = {
   link: {
     color: "white",
     textDecoration: "none",
-    padding: 12,
-    borderRadius: 8,
-    background: "#1e293b",
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(15, 23, 42, 0.34)",
     fontSize: 14,
-    fontWeight: 600,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    border: "1px solid rgba(148, 163, 184, 0.14)",
+    transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease",
   },
   linkActive: {
-    background: "#2563eb",
+    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+    boxShadow: "0 14px 26px rgba(37, 99, 235, 0.24)",
   },
 };

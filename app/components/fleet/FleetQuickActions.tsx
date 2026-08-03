@@ -1,14 +1,15 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { ClipboardCheck, FileText, Ship, TriangleAlert, Wrench } from "lucide-react";
 
 const ACTIONS = [
-  { href: "/fleet/vessels", title: "Fleet Status", description: "Review vessel status and operational readiness." },
-  { href: "/fleet/vessels", title: "Recent Vessel Activity", description: "Open active vessel workspaces and latest updates." },
-  { href: "/fleet/maintenance", title: "Upcoming Maintenance", description: "Track preventive maintenance schedule." },
-  { href: "/fleet/incidents", title: "Latest Incidents", description: "Resolve open incidents and operational alerts." },
-  { href: "/fleet/network", title: "Fleet Network Health", description: "Monitor connectivity and internet posture." },
-  { href: "/fleet/checklist", title: "Checklist Progress", description: "Follow IT checklist completion across vessels." },
-  { href: "/fleet/documents", title: "Fleet Documents", description: "Access vessel docs and operational records." },
+  { href: "/fleet/vessels", title: "Fleet Status", description: "Review vessel status and operational readiness.", icon: Ship },
+  { href: "/fleet/vessels", title: "Recent Vessel Activity", description: "Open active vessel workspaces and latest updates.", icon: FileText },
+  { href: "/fleet/maintenance", title: "Upcoming Maintenance", description: "Track preventive maintenance schedule.", icon: Wrench },
+  { href: "/fleet/incidents", title: "Latest Incidents", description: "Resolve open incidents and operational alerts.", icon: TriangleAlert },
+  { href: "/fleet/network", title: "Fleet Network Health", description: "Monitor connectivity and internet posture.", icon: Ship },
+  { href: "/fleet/checklist", title: "Checklist Progress", description: "Follow IT checklist completion across vessels.", icon: ClipboardCheck },
+  { href: "/fleet/documents", title: "Fleet Documents", description: "Access vessel docs and operational records.", icon: FileText },
 ];
 
 export default function FleetQuickActions() {
@@ -16,6 +17,9 @@ export default function FleetQuickActions() {
     <section style={styles.grid}>
       {ACTIONS.map((action) => (
         <Link key={action.href + action.title} href={action.href} style={styles.card}>
+          <div style={styles.iconWrap}>
+            <action.icon size={18} strokeWidth={2.2} />
+          </div>
           <h3 style={styles.title}>{action.title}</h3>
           <p style={styles.text}>{action.description}</p>
         </Link>
@@ -32,19 +36,31 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: "white",
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
+    border: "1px solid #dbeafe",
+    borderRadius: 18,
     padding: 18,
     textDecoration: "none",
-    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
+    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
+    display: "grid",
+    gap: 10,
+  },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    background: "#eff6ff",
+    color: "#1d4ed8",
   },
   title: {
     margin: 0,
     color: "#0f172a",
     fontSize: 18,
+    fontWeight: 800,
   },
   text: {
-    margin: "8px 0 0",
+    margin: 0,
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.5,

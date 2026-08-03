@@ -3,6 +3,20 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import {
+  ArrowRightLeft,
+  Building2,
+  FileText,
+  LayoutDashboard,
+  Package,
+  Radio,
+  Settings2,
+  Ship,
+  Ticket,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { getUserProfile, isEmployee, isOwnerEmail, roleLabel, Role } from "../lib/rbac";
 
@@ -11,41 +25,54 @@ type WorkspaceGroup = "office" | "fleet";
 interface NavItem {
   href: string;
   label: string;
+  icon: LucideIcon;
+}
+
+interface WorkspaceSectionConfig {
+  title: string;
+  icon: LucideIcon;
+  items: NavItem[];
 }
 
 const OFFICE_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/admin/assets", label: "Assets" },
-  { href: "/admin/employees", label: "Employees" },
-  { href: "/admin/assignments", label: "Assignments" },
-  { href: "/admin/tickets", label: "Tickets" },
-  { href: "/admin/maintenance", label: "Maintenance" },
-  { href: "/admin/network", label: "Network Monitoring" },
-  { href: "/admin/reports", label: "Reports" },
-  { href: "/admin/activity", label: "Activity Logs" },
-  { href: "/admin/users", label: "Users" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/assets", label: "Assets", icon: Package },
+  { href: "/admin/employees", label: "Employees", icon: Users },
+  { href: "/admin/assignments", label: "Assignments", icon: ArrowRightLeft },
+  { href: "/admin/tickets", label: "Tickets", icon: Ticket },
+  { href: "/admin/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/admin/network", label: "Network Monitoring", icon: Radio },
+  { href: "/admin/reports", label: "Reports", icon: FileText },
+  { href: "/admin/activity", label: "Activity Logs", icon: FileText },
+  { href: "/admin/users", label: "Users", icon: Users },
 ];
 
 const FLEET_ITEMS: NavItem[] = [
-  { href: "/fleet/dashboard", label: "Fleet Dashboard" },
-  { href: "/fleet/vessels", label: "Vessels" },
-  { href: "/admin/assets", label: "Fleet Assets" },
-  { href: "/admin/network", label: "Network Monitoring" },
-  { href: "/admin/checklists", label: "IT Checklist" },
-  { href: "/admin/maintenance", label: "Maintenance" },
-  { href: "/admin/tickets", label: "Incidents" },
-  { href: "/fleet/documents", label: "Documents" },
-  { href: "/fleet/reports", label: "Reports" },
-  { href: "/fleet/vessels", label: "Crew IT" },
+  { href: "/fleet/dashboard", label: "Fleet Dashboard", icon: LayoutDashboard },
+  { href: "/fleet/vessels", label: "Vessels", icon: Ship },
+  { href: "/fleet/assets", label: "Fleet Assets", icon: Package },
+  { href: "/fleet/crew", label: "Crew", icon: Users },
+  { href: "/fleet/assignments", label: "Assignments", icon: ArrowRightLeft },
+  { href: "/fleet/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/fleet/incidents", label: "Incidents", icon: Ticket },
+  { href: "/fleet/documents", label: "Documents", icon: FileText },
+  { href: "/fleet/reports", label: "Reports", icon: FileText },
+  { href: "/fleet/settings", label: "Settings", icon: Settings2 },
 ];
+
+const WORKSPACE_SECTIONS: Record<WorkspaceGroup, WorkspaceSectionConfig> = {
+  office: { title: "Office Operations", icon: Building2, items: OFFICE_ITEMS },
+  fleet: { title: "Fleet Operations", icon: Ship, items: FLEET_ITEMS },
+};
 
 export default function Sidebar() {
   const [role, setRole] = useState<Role | null>(null);
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
-  const [expandedGroup, setExpandedGroup] = useState<WorkspaceGroup>("office");
   const pathname = usePathname();
   const router = useRouter();
+  const activeGroup: WorkspaceGroup = pathname?.startsWith("/fleet") ? "fleet" : "office";
+  const activeWorkspace = WORKSPACE_SECTIONS[activeGroup];
 
   useEffect(() => {
     const loadRole = async () => {
@@ -57,14 +84,8 @@ export default function Sidebar() {
       }
 
       setRole(profile.role);
-  setUserEmail(profile.email);
+      setUserEmail(profile.email);
       setLoading(false);
-
-      if (pathname?.startsWith("/fleet")) {
-        setExpandedGroup("fleet");
-      } else {
-        setExpandedGroup("office");
-      }
     };
 
     void loadRole();
@@ -91,28 +112,19 @@ export default function Sidebar() {
       <div style={styles.brand}>
         <h2 style={styles.logo}>IT Management</h2>
         <span style={styles.roleBadge}>{roleLabel[role]}</span>
+        <div style={styles.workspaceCard}>
+          <span style={styles.workspaceLabel}>Current Workspace</span>
+          <span style={styles.workspaceBadge}>
+            <activeWorkspace.icon size={16} strokeWidth={2.2} />
+            {activeWorkspace.title}
+          </span>
+        </div>
       </div>
 
       <nav className="sidebar-menu-scroll" style={styles.nav}>
         {showAdminLinks ? (
           <>
-            <SidebarLink href="/dashboard" label="Dashboard" pathname={pathname} />
-
-            <WorkspaceSection
-              title="?? OFFICE OPERATIONS"
-              expanded={expandedGroup === "office"}
-              onToggle={() => setExpandedGroup("office")}
-              items={OFFICE_ITEMS}
-              pathname={pathname}
-            />
-
-            <WorkspaceSection
-              title="?? FLEET OPERATIONS"
-              expanded={expandedGroup === "fleet"}
-              onToggle={() => setExpandedGroup("fleet")}
-              items={FLEET_ITEMS}
-              pathname={pathname}
-            />
+            <WorkspaceSection title={activeWorkspace.title} icon={activeWorkspace.icon} items={activeWorkspace.items} pathname={pathname} />
           </>
         ) : (
           <>
@@ -151,35 +163,25 @@ export default function Sidebar() {
 
 function WorkspaceSection({
   title,
-  expanded,
-  onToggle,
+  icon: Icon,
   items,
   pathname,
 }: {
   title: string;
-  expanded: boolean;
-  onToggle: () => void;
+  icon: LucideIcon;
   items: NavItem[];
   pathname: string | null;
 }) {
-  const maxHeight = expanded ? items.length * 46 + 12 : 0;
-
   return (
     <div style={styles.sectionWrap}>
-      <button type="button" onClick={onToggle} style={styles.sectionToggle}>
+      <div style={styles.sectionHeader}>
+        <Icon size={18} strokeWidth={2.2} />
         <span style={styles.sectionTitle}>{title}</span>
-        <span style={styles.sectionArrow}>{expanded ? "?" : "?"}</span>
-      </button>
+      </div>
 
-      <div
-        style={{
-          ...styles.sectionBody,
-          maxHeight,
-          opacity: expanded ? 1 : 0.65,
-        }}
-      >
+      <div style={styles.sectionBody}>
         {items.map((item) => (
-          <SidebarLink key={`${title}-${item.label}`} href={item.href} label={item.label} pathname={pathname} nested />
+          <SidebarLink key={`${title}-${item.label}`} href={item.href} label={item.label} icon={item.icon} pathname={pathname} nested />
         ))}
       </div>
     </div>
@@ -189,11 +191,13 @@ function WorkspaceSection({
 function SidebarLink({
   href,
   label,
+  icon: Icon,
   pathname,
   nested = false,
 }: {
   href: string;
   label: string;
+  icon?: LucideIcon;
   pathname: string | null;
   nested?: boolean;
 }) {
@@ -208,6 +212,7 @@ function SidebarLink({
         ...(active ? styles.linkActive : {}),
       }}
     >
+      {Icon && <Icon size={16} strokeWidth={2.2} />}
       {label}
     </Link>
   );
@@ -234,17 +239,46 @@ const styles: Record<string, CSSProperties> = {
   },
   brand: {
     flexShrink: 0,
-    marginBottom: 28,
+    marginBottom: 18,
+    display: "grid",
+    gap: 12,
   },
   roleBadge: {
     display: "inline-flex",
-    marginTop: 12,
     padding: "6px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#cbd5e1",
     fontSize: 12,
     fontWeight: 700,
+  },
+  workspaceCard: {
+    display: "grid",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  workspaceLabel: {
+    fontSize: 11,
+    color: "#93c5fd",
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+    fontWeight: 800,
+  },
+  workspaceBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(37, 99, 235, 0.22)",
+    color: "#eff6ff",
+    fontSize: 13,
+    fontWeight: 800,
+    border: "1px solid rgba(96, 165, 250, 0.24)",
   },
   loadingWrap: {
     flex: 1,
@@ -270,50 +304,51 @@ const styles: Record<string, CSSProperties> = {
   link: {
     color: "white",
     textDecoration: "none",
-    padding: 12,
-    borderRadius: 8,
-    background: "#1e293b",
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(15, 23, 42, 0.36)",
     fontSize: 14,
-    display: "block",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontWeight: 700,
+    border: "1px solid rgba(148, 163, 184, 0.14)",
+    transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease",
   },
   linkNested: {
-    padding: "10px 12px",
+    padding: "11px 12px",
     fontSize: 13,
-    background: "#172435",
+    background: "rgba(15, 23, 42, 0.24)",
     marginTop: 8,
   },
   linkActive: {
-    background: "#2563eb",
+    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+    borderColor: "rgba(96, 165, 250, 0.4)",
+    boxShadow: "0 14px 26px rgba(37, 99, 235, 0.24)",
   },
   sectionWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(148, 163, 184, 0.12)",
   },
-  sectionToggle: {
-    width: "100%",
-    border: "none",
-    background: "transparent",
-    color: "#38bdf8",
+  sectionHeader: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: "2px 2px",
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    cursor: "pointer",
+    gap: 8,
+    color: "#93c5fd",
   },
   sectionTitle: {
     textAlign: "left",
-  },
-  sectionArrow: {
-    color: "#94a3b8",
-    fontSize: 12,
+    color: "#cbd5e1",
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
   },
   sectionBody: {
-    overflow: "hidden",
-    transition: "max-height 240ms ease, opacity 220ms ease",
+    display: "grid",
   },
 };

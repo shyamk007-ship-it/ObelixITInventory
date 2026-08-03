@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 interface WorkspaceCardProps {
-  icon: string;
+  icon: ReactNode;
   title: string;
   description: string;
   href: string;
@@ -11,7 +12,7 @@ interface WorkspaceCardProps {
 export default function WorkspaceCard({ icon, title, description, href, ctaLabel }: WorkspaceCardProps) {
   return (
     <article style={styles.card}>
-      <p style={styles.icon}>{icon}</p>
+      <div style={styles.icon}>{icon}</div>
       <h2 style={styles.title}>{title}</h2>
       <p style={styles.description}>{description}</p>
       <Link href={href} style={styles.cta}>
@@ -34,13 +35,18 @@ const styles: any = {
     transition: "transform 0.2s ease, box-shadow 0.2s ease",
   },
   icon: {
-    margin: 0,
-    fontSize: 34,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%)",
+    color: "#1d4ed8",
   },
   title: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 800,
   },
   description: {
@@ -55,7 +61,7 @@ const styles: any = {
     alignSelf: "flex-start",
     textDecoration: "none",
     color: "white",
-    background: "#2563eb",
+    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
     borderRadius: 999,
     padding: "10px 16px",
     fontWeight: 700,

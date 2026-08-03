@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import OfficeSidebar from "../components/office/OfficeSidebar";
 import OfficeHeader from "../components/office/OfficeHeader";
+import WorkspaceBreadcrumbs from "../components/shared/WorkspaceBreadcrumbs";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
 import { canAccessWorkspaceAssignments } from "../lib/rbac";
@@ -121,6 +122,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
         <OfficeHeader
           title={headerMeta.title}
           subtitle={headerMeta.subtitle}
+          breadcrumbs={<WorkspaceBreadcrumbs />}
         />
         {children}
       </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { Ship } from "lucide-react";
 import NotificationBell from "../shared/NotificationBell";
 import UserProfile from "../shared/UserProfile";
 import SearchBar from "../shared/SearchBar";
@@ -16,7 +17,10 @@ export default function FleetHeader({ title, subtitle, breadcrumbs }: FleetHeade
     <header style={styles.wrap}>
       <div style={styles.left}>
         {breadcrumbs}
-        <p style={styles.eyebrow}>Fleet Workspace</p>
+        <p style={styles.eyebrow}>
+          <Ship size={14} strokeWidth={2.2} />
+          <span>Fleet Operations</span>
+        </p>
         <h1 style={styles.title}>{title}</h1>
         <p style={styles.subtitle}>{subtitle}</p>
       </div>
@@ -51,6 +55,9 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.18em",
     fontSize: 12,
     fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
   },
   title: {
     margin: 0,

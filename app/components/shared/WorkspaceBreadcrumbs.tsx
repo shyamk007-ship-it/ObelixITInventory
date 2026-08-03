@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
+import { ChevronRight } from "lucide-react";
+
+const workspaceLabels: Record<string, { label: string; href: string }> = {
+  office: { label: "Office Operations", href: "/office/dashboard" },
+  fleet: { label: "Fleet Operations", href: "/fleet/dashboard" },
+};
 
 const segmentLabels: Record<string, string> = {
-  office: "Office",
-  fleet: "Fleet",
   dashboard: "Dashboard",
   assets: "Assets",
   employees: "Employees",
@@ -18,9 +22,30 @@ const segmentLabels: Record<string, string> = {
   maintenance: "Maintenance",
   network: "Network Monitoring",
   activity: "Recent Activity",
+  vessels: "Vessels",
+  crew: "Crew",
+  incidents: "Incidents",
+  documents: "Documents",
+  certificates: "Certificates",
+  checklist: "Checklist",
 };
 
-const toLabel = (segment: string) => {
+const detailLabels: Record<string, string> = {
+  employees: "Employee Profile",
+  assets: "Asset Details",
+  vessels: "Vessel Profile",
+  crew: "Crew Member",
+  tickets: "Ticket Details",
+  incidents: "Incident Details",
+  documents: "Document Library",
+  assignments: "Assignment Details",
+};
+
+const toLabel = (segment: string, previousSegment?: string) => {
+  if (/^\d+$/.test(segment) && previousSegment && detailLabels[previousSegment]) {
+    return detailLabels[previousSegment];
+  }
+
   if (segmentLabels[segment]) return segmentLabels[segment];
   return segment
     .split("-")
@@ -36,24 +61,43 @@ export default function WorkspaceBreadcrumbs() {
     return null;
   }
 
+  const workspaceKey = segments[0] === "office" || segments[0] === "fleet" ? segments[0] : null;
+  const workspace = workspaceKey ? workspaceLabels[workspaceKey] : null;
+  const contentSegments = workspaceKey ? segments.slice(1) : segments;
+
   return (
     <nav style={styles.nav} aria-label="Breadcrumb">
       <Link href="/" style={styles.link}>
         Company Portal
       </Link>
-      {segments.map((segment, index) => {
-        const href = `/${segments.slice(0, index + 1).join("/")}`;
-        const isLast = index === segments.length - 1;
+      {workspace && (
+        <span style={styles.crumb}>
+          <ChevronRight size={14} strokeWidth={2.2} />
+          <Link href={workspace.href} style={styles.link}>
+            {workspace.label}
+          </Link>
+        </span>
+      )}
+      {contentSegments.map((segment, index) => {
+        const pathSegments = workspaceKey ? [workspaceKey, ...contentSegments.slice(0, index + 1)] : contentSegments.slice(0, index + 1);
+        const href = `/${pathSegments.join("/")}`;
+        const isLast = index === contentSegments.length - 1;
+        const previousSegment = index > 0 ? contentSegments[index - 1] : workspaceKey || undefined;
 
         return (
           <span key={href} style={styles.crumb}>
-            <span style={styles.separator}>/</span>
             {isLast ? (
-              <span style={styles.current}>{toLabel(segment)}</span>
+              <>
+                <ChevronRight size={14} strokeWidth={2.2} style={{ color: "#94a3b8" }} />
+                <span style={styles.current}>{toLabel(segment, previousSegment)}</span>
+              </>
             ) : (
+              <>
+                <ChevronRight size={14} strokeWidth={2.2} style={{ color: "#94a3b8" }} />
               <Link href={href} style={styles.link}>
-                {toLabel(segment)}
+                {toLabel(segment, previousSegment)}
               </Link>
+              </>
             )}
           </span>
         );
@@ -76,9 +120,6 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-  },
-  separator: {
-    color: "#94a3b8",
   },
   link: {
     color: "#475569",
