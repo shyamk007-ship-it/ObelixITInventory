@@ -143,6 +143,10 @@ const formatSafeDate = (value?: string | null) => {
   return date.toLocaleDateString();
 };
 
+const splitHead = (value: unknown, separator: string) => String(value || "").split(separator)[0] || "";
+
+const splitTail = (value: unknown, separator: string) => String(value || "").split(separator)[1] || "";
+
 export default function OfficeDashboardPage() {
   const { profile } = useEnterpriseAccess();
   const [loading, setLoading] = useState(true);
@@ -253,13 +257,19 @@ export default function OfficeDashboardPage() {
   );
 
   const purchaseTrend = useMemo(
-    () => seriesByMonth(dataState.purchaseOrders.map((row) => row.created_at)).map((row) => ({ ...row, spend: dataState.purchaseOrders.filter((po) => (po.created_at || "").includes(row.label.split(" ")[0])).reduce((sum, po) => sum + Number(po.total_amount || 0), 0) })),
+    () =>
+      seriesByMonth(dataState.purchaseOrders.map((row) => row.created_at)).map((row) => ({
+        ...row,
+        spend: dataState.purchaseOrders
+          .filter((po) => String(po.created_at || "").includes(splitHead(row.label, " ")))
+          .reduce((sum, po) => sum + Number(po.total_amount || 0), 0),
+      })),
     [dataState.purchaseOrders]
   );
 
   const employeeDeptSeries = useMemo(() => {
     const employees = analytics.recentActivity.filter((row) => row.kind === "Employee");
-    return employees.length ? countBy(employees.map((row) => row.detail.split(" • ")[0] || "Unassigned")) : noData;
+    return employees.length ? countBy(employees.map((row) => splitHead(row.detail, " • ") || "Unassigned")) : noData;
   }, [analytics.recentActivity]);
 
   const metrics = useMemo<MetricCard[]>(() => {
@@ -478,7 +488,7 @@ export default function OfficeDashboardPage() {
   const employeeStats = useMemo(() => {
     const assignedPeople = analytics.recentActivity
       .filter((row) => row.kind === "Assignment")
-      .map((row) => row.detail.split("assigned to ")[1] || "")
+      .map((row) => splitTail(row.detail, "assigned to "))
       .filter(Boolean);
     const uniqueAssigned = new Set(assignedPeople);
     const noAssets = Math.max(0, analytics.employees - uniqueAssigned.size);
@@ -1060,9 +1070,9 @@ const styles: Record<string, CSSProperties> = {
     gridColumn: "span 6",
     textDecoration: "none",
     borderRadius: 16,
-    border: "1px solid #dbeafe",
-    background: "rgba(255,255,255,0.95)",
-    boxShadow: "0 14px 35px rgba(15, 23, 42, 0.08)",
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
     padding: 14,
     display: "grid",
     gap: 8,
@@ -1085,9 +1095,9 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     borderRadius: 999,
     padding: "5px 8px",
-    border: "1px solid #bfdbfe",
-    background: "#eff6ff",
-    color: "#1e3a8a",
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    color: "#0f172a",
   },
   rowList: { display: "grid", gap: 8 },
   rowItem: {
@@ -1119,7 +1129,7 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     minWidth: 96,
     borderRadius: 10,
-    border: "1px solid #dbeafe",
+    border: "1px solid #e2e8f0",
     padding: "10px 10px",
     display: "grid",
     gap: 4,
@@ -1158,15 +1168,15 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     fontSize: 13,
     fontWeight: 700,
-    border: "1px dashed #cbd5e1",
+    border: "1px dashed #e2e8f0",
     borderRadius: 12,
-    background: "rgba(248, 250, 252, 0.8)",
+    background: "#f8fafc",
   },
   footerGrid: { display: "grid", gap: 8 },
   footerItem: {
     borderRadius: 10,
-    border: "1px solid #dbeafe",
-    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
     padding: "10px 10px",
     display: "flex",
     justifyContent: "space-between",
@@ -1178,7 +1188,7 @@ const styles: Record<string, CSSProperties> = {
   skeletonCard: {
     borderRadius: 14,
     height: 146,
-    background: "linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%)",
+    background: "linear-gradient(90deg, #e2e8f0 0%, #f8fafc 50%, #e2e8f0 100%)",
     backgroundSize: "200% 100%",
     animation: "pulse 1.4s ease-in-out infinite",
   },
@@ -1186,28 +1196,28 @@ const styles: Record<string, CSSProperties> = {
 
 const light = {
   page: { background: "transparent" },
-  executiveHeader: { background: "rgba(255,255,255,0.92)", borderColor: "#dbeafe" },
+  executiveHeader: { background: "#ffffff", borderColor: "#e2e8f0" },
   textStrong: { color: "#0f172a" },
   textMuted: { color: "#64748b" },
-  pill: { background: "#f8fafc", borderColor: "#dbeafe", color: "#334155" },
-  quickButton: { color: "#0f172a", background: "#ffffff", borderColor: "#bfdbfe" },
-  kpiStickyWrap: { background: "rgba(248, 250, 252, 0.95)", borderColor: "#dbeafe" },
-  kpiCard: { background: "white", borderColor: "#dbeafe", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" },
-  card: { background: "#ffffff", borderColor: "#dbeafe", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" },
+  pill: { background: "#f8fafc", borderColor: "#e2e8f0", color: "#334155" },
+  quickButton: { color: "#0f172a", background: "#ffffff", borderColor: "#e2e8f0" },
+  kpiStickyWrap: { background: "#ffffff", borderColor: "#e2e8f0" },
+  kpiCard: { background: "white", borderColor: "#e2e8f0", boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)" },
+  card: { background: "#ffffff", borderColor: "#e2e8f0", boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)" },
   rowItem: { background: "#f8fafc", borderColor: "#e2e8f0" },
-  shortcutLink: { background: "#f8fafc", borderColor: "#dbeafe", color: "#0f172a" },
+  shortcutLink: { background: "#f8fafc", borderColor: "#e2e8f0", color: "#0f172a" },
 };
 
 const dark = {
   page: { background: "transparent" },
-  executiveHeader: { background: "rgba(15, 23, 42, 0.9)", borderColor: "#334155" },
+  executiveHeader: { background: "#0f172a", borderColor: "#1e293b" },
   textStrong: { color: "#f5f7fb" },
   textMuted: { color: "#9db0c2" },
-  pill: { background: "#18263a", borderColor: "#334155", color: "#c5d2df" },
-  quickButton: { color: "#dce7f4", background: "#18263a", borderColor: "#334155" },
-  kpiStickyWrap: { background: "rgba(15, 23, 42, 0.94)", borderColor: "#334155" },
-  kpiCard: { background: "#142235", borderColor: "#334155", boxShadow: "0 10px 24px rgba(2, 6, 23, 0.45)" },
-  card: { background: "#142235", borderColor: "#334155", boxShadow: "0 10px 24px rgba(2, 6, 23, 0.45)" },
-  rowItem: { background: "#18263a", borderColor: "#334155" },
-  shortcutLink: { background: "#18263a", borderColor: "#334155", color: "#dce7f4" },
+  pill: { background: "#1e293b", borderColor: "#334155", color: "#e2e8f0" },
+  quickButton: { color: "#dce7f4", background: "#1e293b", borderColor: "#334155" },
+  kpiStickyWrap: { background: "#0f172a", borderColor: "#334155" },
+  kpiCard: { background: "#111827", borderColor: "#334155", boxShadow: "0 10px 22px rgba(2, 6, 23, 0.28)" },
+  card: { background: "#111827", borderColor: "#334155", boxShadow: "0 10px 22px rgba(2, 6, 23, 0.28)" },
+  rowItem: { background: "#1e293b", borderColor: "#334155" },
+  shortcutLink: { background: "#1e293b", borderColor: "#334155", color: "#dce7f4" },
 };

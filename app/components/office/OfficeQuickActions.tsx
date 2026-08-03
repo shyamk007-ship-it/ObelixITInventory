@@ -36,11 +36,11 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: "white",
-    border: "1px solid #dbeafe",
-    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     padding: 18,
     textDecoration: "none",
-    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
     display: "grid",
     gap: 10,
   },
@@ -51,7 +51,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     placeItems: "center",
     background: "#eff6ff",
-    color: "#1d4ed8",
+    color: "#2563eb",
   },
   title: {
     margin: 0,

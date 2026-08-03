@@ -38,25 +38,37 @@ const ITEMS: Array<{ key: OfficeStatKey; label: string; icon: LucideIcon }> = [
   { key: "warrantyExpiring", label: "Warranty Expiring", icon: CalendarClock },
 ];
 
+const CARD_ACCENTS: Record<OfficeStatKey, { iconBg: string; iconColor: string; valueColor: string }> = {
+  totalOfficeAssets: { iconBg: "#eff6ff", iconColor: "#2563eb", valueColor: "#2563eb" },
+  assignedAssets: { iconBg: "#ecfeff", iconColor: "#0ea5e9", valueColor: "#0ea5e9" },
+  availableAssets: { iconBg: "#ecfdf5", iconColor: "#22c55e", valueColor: "#22c55e" },
+  employees: { iconBg: "#fff7ed", iconColor: "#f59e0b", valueColor: "#f59e0b" },
+  openTickets: { iconBg: "#fef2f2", iconColor: "#dc2626", valueColor: "#dc2626" },
+  resolvedTickets: { iconBg: "#f0fdf4", iconColor: "#22c55e", valueColor: "#22c55e" },
+  criticalIssues: { iconBg: "#fef2f2", iconColor: "#dc2626", valueColor: "#dc2626" },
+  maintenanceDue: { iconBg: "#fff7ed", iconColor: "#f59e0b", valueColor: "#f59e0b" },
+  warrantyExpiring: { iconBg: "#f5f3ff", iconColor: "#8b5cf6", valueColor: "#8b5cf6" },
+};
+
 export default function OfficeStats(props: OfficeStatsProps) {
   return (
     <section style={styles.grid}>
       {ITEMS.map((item) => (
         props.hrefs?.[item.key] ? (
           <Link key={item.key} href={props.hrefs[item.key] || "#"} style={styles.linkCard}>
-            <div style={styles.iconWrap}>
+            <div style={{ ...styles.iconWrap, background: CARD_ACCENTS[item.key].iconBg, color: CARD_ACCENTS[item.key].iconColor }}>
               <item.icon size={18} strokeWidth={2.2} />
             </div>
             <p style={styles.label}>{item.label}</p>
-            <strong style={styles.value}>{props[item.key]}</strong>
+            <strong style={{ ...styles.value, color: CARD_ACCENTS[item.key].valueColor }}>{props[item.key]}</strong>
           </Link>
         ) : (
           <div key={item.key} style={styles.card}>
-            <div style={styles.iconWrap}>
+            <div style={{ ...styles.iconWrap, background: CARD_ACCENTS[item.key].iconBg, color: CARD_ACCENTS[item.key].iconColor }}>
               <item.icon size={18} strokeWidth={2.2} />
             </div>
             <p style={styles.label}>{item.label}</p>
-            <strong style={styles.value}>{props[item.key]}</strong>
+            <strong style={{ ...styles.value, color: CARD_ACCENTS[item.key].valueColor }}>{props[item.key]}</strong>
           </div>
         )
       ))}
@@ -72,21 +84,21 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 18,
   },
   card: {
-    background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,246,255,0.96) 100%)",
-    border: "1px solid rgba(191, 219, 254, 0.9)",
-    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     padding: 16,
-    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
     display: "grid",
     gap: 8,
   },
   linkCard: {
     textDecoration: "none",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,246,255,0.96) 100%)",
-    border: "1px solid rgba(191, 219, 254, 0.9)",
-    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     padding: 16,
-    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
     display: "grid",
     gap: 8,
     transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
@@ -98,7 +110,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 12,
     display: "grid",
     placeItems: "center",
-    color: "#1d4ed8",
+    color: "#2563eb",
     background: "#eff6ff",
   },
   label: {
@@ -112,7 +124,6 @@ const styles: Record<string, CSSProperties> = {
   value: {
     display: "block",
     marginTop: 2,
-    color: "#0f172a",
     fontSize: 26,
     fontWeight: 800,
   },

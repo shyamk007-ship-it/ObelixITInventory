@@ -44,14 +44,14 @@ const styles: Record<string, CSSProperties> = {
   },
   link: {
     textDecoration: "none",
-    border: "1px solid rgba(191, 219, 254, 0.9)",
-    background: "rgba(255, 255, 255, 0.92)",
-    color: "#1d4ed8",
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    color: "#2563eb",
     borderRadius: 999,
     padding: "9px 14px",
     fontSize: 12,
     fontWeight: 800,
-    boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+    boxShadow: "0 8px 18px rgba(15, 23, 42, 0.05)",
   },
   linkActive: {
     background: "#2563eb",
