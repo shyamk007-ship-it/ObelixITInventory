@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
 
 const links = [
-  { href: "/office/assets", label: "Dashboard" },
+  { href: "/office/assets", label: "Overview" },
   { href: "/office/assets/register", label: "Asset Register" },
   { href: "/office/assets/categories", label: "Categories" },
   { href: "/office/assets/vendors", label: "Vendors" },
@@ -39,18 +39,19 @@ const styles: Record<string, CSSProperties> = {
   nav: {
     display: "flex",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
+    gap: 10,
+    marginBottom: 18,
   },
   link: {
     textDecoration: "none",
-    border: "1px solid #bfdbfe",
-    background: "#eff6ff",
-    color: "#1e40af",
+    border: "1px solid rgba(191, 219, 254, 0.9)",
+    background: "rgba(255, 255, 255, 0.92)",
+    color: "#1d4ed8",
     borderRadius: 999,
-    padding: "8px 12px",
+    padding: "9px 14px",
     fontSize: 12,
-    fontWeight: 700,
+    fontWeight: 800,
+    boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
   },
   linkActive: {
     background: "#2563eb",

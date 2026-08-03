@@ -18,12 +18,6 @@ const segmentLabels: Record<string, string> = {
   maintenance: "Maintenance",
   network: "Network Monitoring",
   activity: "Recent Activity",
-  vessels: "Vessels",
-  crew: "Crew",
-  incidents: "Tickets",
-  checklist: "Assignments",
-  documents: "Certificates",
-  certificates: "Certificates",
 };
 
 const toLabel = (segment: string) => {

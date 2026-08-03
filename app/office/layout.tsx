@@ -5,47 +5,46 @@ import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import OfficeSidebar from "../components/office/OfficeSidebar";
 import OfficeHeader from "../components/office/OfficeHeader";
-import WorkspaceBreadcrumbs from "../components/shared/WorkspaceBreadcrumbs";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
 import { canAccessWorkspaceAssignments } from "../lib/rbac";
 
 const routeMeta: Record<string, { title: string; subtitle: string }> = {
   dashboard: {
-    title: "Office Dashboard",
-    subtitle: "Manage office assets, employees, support tickets, and administration.",
+    title: "Executive Dashboard",
+    subtitle: "Monitor office assets, employees, support, maintenance, and service levels in one place.",
   },
   assets: {
-    title: "Office Assets",
-    subtitle: "Track office-only asset inventory, lifecycle, and allocation.",
+    title: "Asset Management",
+    subtitle: "Track office-only asset inventory, lifecycle, assignments, and disposition.",
   },
   employees: {
     title: "Employees",
-    subtitle: "Manage office employee records and device ownership.",
+    subtitle: "Manage office employee profiles, device ownership, and history.",
   },
   assignments: {
     title: "Assignments",
-    subtitle: "Review office device assignments and returns.",
+    subtitle: "Review office device assignments, transfers, returns, and history.",
   },
   tickets: {
-    title: "Office Tickets",
-    subtitle: "Handle office support queues, priorities, and assignees.",
+    title: "Support Tickets",
+    subtitle: "Handle office support queues, priorities, comments, and SLAs.",
   },
   reports: {
-    title: "Office Reports",
-    subtitle: "Summaries for office assets, tickets, maintenance, and usage.",
+    title: "Reports",
+    subtitle: "Summaries and exports for assets, employees, tickets, and maintenance.",
   },
   users: {
-    title: "Office Users",
-    subtitle: "Administer office and shared user accounts.",
+    title: "Users",
+    subtitle: "Administer Office user accounts and permissions.",
   },
   settings: {
-    title: "Office Settings",
-    subtitle: "Configure office workspace preferences and policies.",
+    title: "Settings",
+    subtitle: "Configure departments, locations, roles, notifications, and governance.",
   },
   maintenance: {
     title: "Maintenance",
-    subtitle: "Monitor office maintenance schedules and service history.",
+    subtitle: "Monitor preventive and corrective maintenance schedules and history.",
   },
   network: {
     title: "Network Monitoring",
@@ -53,7 +52,7 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
   },
   activity: {
     title: "Recent Activity",
-    subtitle: "Audit office actions and operational events.",
+    subtitle: "Audit office actions, access events, and operational changes.",
   },
 };
 
@@ -122,7 +121,6 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
         <OfficeHeader
           title={headerMeta.title}
           subtitle={headerMeta.subtitle}
-          breadcrumbs={<WorkspaceBreadcrumbs />}
         />
         {children}
       </main>
@@ -132,18 +130,19 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
 
 const styles: Record<string, CSSProperties> = {
   main: {
-    marginLeft: 260,
-    padding: 30,
+    marginLeft: 292,
+    padding: 28,
     minHeight: "100vh",
-    background: "#f1f5f9",
+    background:
+      "radial-gradient(circle at top left, rgba(191, 219, 254, 0.42), transparent 34%), linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)",
   },
   loading: {
     height: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#f8fafc",
+    background: "linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)",
     color: "#0f172a",
-    fontFamily: "Arial, sans-serif",
+    fontFamily: "Inter, system-ui, sans-serif",
   },
 };

@@ -1,59 +1,88 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEnterpriseAccess } from "../shared/EnterpriseAccessProvider";
-import { roleLabel } from "../../lib/rbac";
+import type { CSSProperties } from "react";
 
-const links = [
-  { href: "/office/dashboard", label: "Dashboard" },
-  { href: "/office/assets", label: "Assets" },
-  { href: "/office/employees", label: "Employees" },
-  { href: "/office/assignments", label: "Assignments" },
-  { href: "/office/tickets", label: "Tickets" },
-  { href: "/office/maintenance", label: "Maintenance" },
-  { href: "/office/network", label: "Network Monitoring" },
-  { href: "/office/reports", label: "Reports" },
-  { href: "/office/users", label: "Users" },
-  { href: "/office/settings", label: "Settings" },
+const sections = [
+  {
+    title: "Dashboard",
+    links: [{ href: "/office/dashboard", label: "Executive Dashboard" }],
+  },
+  {
+    title: "Asset Management",
+    links: [
+      { href: "/office/assets", label: "Assets" },
+      { href: "/office/assets/assignments", label: "Assignments" },
+      { href: "/office/assets/maintenance", label: "Maintenance" },
+      { href: "/office/assets/warranty", label: "Warranty" },
+      { href: "/office/assets/reports", label: "Asset Reports" },
+    ],
+  },
+  {
+    title: "People",
+    links: [
+      { href: "/office/employees", label: "Employees" },
+      { href: "/office/users", label: "Users" },
+    ],
+  },
+  {
+    title: "Support",
+    links: [
+      { href: "/office/tickets", label: "Tickets" },
+      { href: "/office/reports", label: "Reports" },
+      { href: "/office/activity", label: "Activity Logs" },
+      { href: "/office/network", label: "Network Monitoring" },
+    ],
+  },
+  {
+    title: "Administration",
+    links: [{ href: "/office/settings", label: "Settings" }],
+  },
 ];
 
 export default function OfficeSidebar() {
   const pathname = usePathname();
-  const { activeAssignment } = useEnterpriseAccess();
-  const isSuperAdmin = activeAssignment?.role === "super_admin";
-
-  const visibleLinks = links.filter((link) => link.href !== "/office/settings" || isSuperAdmin);
 
   return (
     <aside style={styles.sidebar}>
-      <div style={styles.brand}>
-        <h2 style={styles.logo}>IT Management</h2>
-        <span style={styles.badge}>{activeAssignment ? roleLabel[activeAssignment.role] : "Office Workspace"}</span>
+      <div style={styles.brandCard}>
+        <div>
+          <p style={styles.eyebrow}>Office Workspace</p>
+          <h2 style={styles.logo}>Enterprise IT Portal</h2>
+          <p style={styles.description}>Office assets, support, employees, and administration in one workspace.</p>
+        </div>
+        <span style={styles.badge}>Office only</span>
       </div>
 
-      <nav style={styles.nav}>
-        {visibleLinks.map((link) => {
-          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+      <nav style={styles.nav} aria-label="Office navigation">
+        {sections.map((section) => (
+          <div key={section.title} style={styles.section}>
+            <p style={styles.sectionTitle}>{section.title}</p>
+            <div style={styles.sectionLinks}>
+              {section.links.map((link) => {
+                const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
 
-          return (
-            <Link
-              key={`${link.href}-${link.label}`}
-              href={link.href}
-              style={{
-                ...styles.link,
-                ...(active ? styles.linkActive : {}),
-              }}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    style={{
+                      ...styles.link,
+                      ...(active ? styles.linkActive : {}),
+                    }}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       <Link href="/" style={styles.portalLink}>
-        Back to Company Portal
+        Company Portal
       </Link>
     </aside>
   );
@@ -61,67 +90,113 @@ export default function OfficeSidebar() {
 
 const styles: Record<string, CSSProperties> = {
   sidebar: {
-    width: 240,
+    width: 292,
     height: "100vh",
     position: "fixed",
-    top: 0,
-    left: 0,
-    background: "#0f172a",
+    inset: "0 auto 0 0",
+    background:
+      "linear-gradient(180deg, #06111f 0%, #0b1f35 42%, #102a46 100%)",
     color: "white",
     padding: 20,
     display: "flex",
     flexDirection: "column",
+    gap: 16,
     overflow: "hidden",
-    borderRight: "1px solid rgba(148, 163, 184, 0.2)",
+    borderRight: "1px solid rgba(148, 163, 184, 0.18)",
+    boxShadow: "16px 0 40px rgba(2, 8, 23, 0.18)",
   },
-  brand: {
-    flexShrink: 0,
-    marginBottom: 20,
+  brandCard: {
+    borderRadius: 22,
+    padding: 18,
+    background: "rgba(255, 255, 255, 0.06)",
+    border: "1px solid rgba(255, 255, 255, 0.10)",
+    backdropFilter: "blur(16px)",
+    display: "grid",
+    gap: 12,
+  },
+  eyebrow: {
+    margin: 0,
+    fontSize: 11,
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    color: "#93c5fd",
+    fontWeight: 800,
   },
   logo: {
-    margin: 0,
-    color: "#38bdf8",
-    fontSize: 24,
+    margin: "8px 0 0",
+    color: "#ffffff",
+    fontSize: 20,
+    lineHeight: 1.15,
+  },
+  description: {
+    margin: "8px 0 0",
+    color: "#bfdbfe",
+    fontSize: 13,
+    lineHeight: 1.6,
   },
   badge: {
     display: "inline-flex",
-    marginTop: 12,
-    padding: "6px 10px",
+    width: "fit-content",
+    padding: "6px 12px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#cbd5e1",
+    background: "rgba(37, 99, 235, 0.25)",
+    color: "#dbeafe",
     fontSize: 12,
-    fontWeight: 700,
+    fontWeight: 800,
+    border: "1px solid rgba(96, 165, 250, 0.25)",
   },
   nav: {
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
-    overflowX: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
+    paddingRight: 4,
+    display: "grid",
+    gap: 14,
     scrollbarWidth: "thin",
     scrollbarColor: "#475569 transparent",
   },
+  section: {
+    display: "grid",
+    gap: 8,
+  },
+  sectionTitle: {
+    margin: 0,
+    color: "#94a3b8",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "0.16em",
+    fontWeight: 800,
+  },
+  sectionLinks: {
+    display: "grid",
+    gap: 8,
+  },
   portalLink: {
     flexShrink: 0,
-    marginTop: 12,
-    color: "#cbd5e1",
+    color: "#dbeafe",
     textDecoration: "none",
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 800,
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(148, 163, 184, 0.18)",
+    background: "rgba(255, 255, 255, 0.04)",
   },
   link: {
-    color: "white",
+    color: "#e2e8f0",
     textDecoration: "none",
-    padding: 12,
-    borderRadius: 8,
-    background: "#1e293b",
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(15, 23, 42, 0.36)",
+    border: "1px solid rgba(148, 163, 184, 0.14)",
     fontSize: 14,
-    fontWeight: 600,
+    fontWeight: 700,
+    transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease",
   },
   linkActive: {
-    background: "#2563eb",
+    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+    borderColor: "rgba(96, 165, 250, 0.45)",
+    color: "white",
+    boxShadow: "0 14px 28px rgba(37, 99, 235, 0.28)",
   },
 };
