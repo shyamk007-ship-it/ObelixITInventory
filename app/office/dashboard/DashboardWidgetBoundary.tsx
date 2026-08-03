@@ -19,7 +19,9 @@ export default class DashboardWidgetBoundary extends Component<DashboardWidgetBo
   }
 
   componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
-    // Prevent full dashboard collapse when a single widget fails.
+    // Keep route alive when a single widget fails.
+    void _error;
+    void _errorInfo;
   }
 
   render() {

@@ -558,6 +558,7 @@ export default function OfficeDashboardPage() {
 
   return (
     <div style={{ ...styles.page, ...sectionTone.page }}>
+      <DashboardWidgetBoundary widgetName="Executive Header">
       <section style={{ ...styles.executiveHeader, ...sectionTone.executiveHeader }}>
         <div style={styles.executiveLeft}>
           <WorkspaceBreadcrumbs />
@@ -579,7 +580,9 @@ export default function OfficeDashboardPage() {
           </div>
         </div>
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Quick Action Bar">
       <section style={styles.quickActionBar}>
         {[
           { label: "Add Asset", href: "/office/assets/register" },
@@ -595,7 +598,9 @@ export default function OfficeDashboardPage() {
           </Link>
         ))}
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Executive KPI Cards">
       <section style={{ ...styles.kpiStickyWrap, ...sectionTone.kpiStickyWrap }}>
         <div style={styles.kpiGrid}>
           {loading
@@ -603,6 +608,7 @@ export default function OfficeDashboardPage() {
             : metrics.map((metric) => <KpiCard key={metric.key} metric={metric} theme={theme} />)}
         </div>
       </section>
+      </DashboardWidgetBoundary>
 
       <DashboardWidgetBoundary widgetName="Analytics Section">
       <section style={styles.section}>
@@ -808,23 +814,26 @@ export default function OfficeDashboardPage() {
 }
 
 function KpiCard({ metric, theme }: { metric: MetricCard; theme: UiTheme }) {
+  const safeValue = Number.isFinite(metric.value) ? metric.value : 0;
+  const safeTrend = Array.isArray(metric.trend) && metric.trend.length > 0 ? metric.trend : noData;
+  const safeProgress = Number.isFinite(metric.progress) ? Math.max(0, Math.min(100, metric.progress)) : 0;
   return (
     <Link href={metric.href} style={{ ...styles.kpiCard, ...(theme === "dark" ? dark.kpiCard : light.kpiCard) }}>
       <div style={styles.kpiTop}>
         <span style={{ ...styles.kpiIcon, background: `${metric.accent}22`, color: metric.accent }}>{metric.icon}</span>
         <span style={styles.kpiChange}>{metric.change >= 0 ? `+${metric.change}` : metric.change} today</span>
       </div>
-      <strong style={styles.kpiValue}>{metric.value.toLocaleString()}</strong>
+      <strong style={styles.kpiValue}>{safeValue.toLocaleString()}</strong>
       <p style={styles.kpiLabel}>{metric.label}</p>
       <div style={styles.sparklineWrap}>
         <ResponsiveContainer width="100%" height={38}>
-          <LineChart data={metric.trend.length ? metric.trend : noData}>
+          <LineChart data={safeTrend}>
             <Line type="monotone" dataKey="value" stroke={metric.accent} strokeWidth={2.2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
       <div style={styles.progressTrack}>
-        <span style={{ ...styles.progressFill, width: `${metric.progress}%`, background: metric.accent }} />
+        <span style={{ ...styles.progressFill, width: `${safeProgress}%`, background: metric.accent }} />
       </div>
     </Link>
   );
@@ -837,7 +846,7 @@ function ChartPanel({ title, href, hasData, children }: { title: string; href: s
         <h3 style={styles.cardTitle}>{title}</h3>
         <span style={styles.kpiBadge}>Drill Down</span>
       </div>
-      {hasData ? children : <div style={styles.chartEmpty}>Waiting for data...</div>}
+      {hasData ? children : <div style={styles.chartEmpty}>No data available</div>}
     </Link>
   );
 }
