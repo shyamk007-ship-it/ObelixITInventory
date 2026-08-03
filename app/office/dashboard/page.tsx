@@ -49,6 +49,7 @@ import UserProfile from "../../components/shared/UserProfile";
 import { useEnterpriseAccess } from "../../components/shared/EnterpriseAccessProvider";
 import { OFFICE_ANALYTICS_METRICS, getDashboardInsights, loadOfficeAnalyticsData } from "../../lib/office-analytics";
 import { supabase } from "../../lib/supabase";
+import DashboardWidgetBoundary from "./DashboardWidgetBoundary";
 
 type UiTheme = "light" | "dark";
 
@@ -135,6 +136,13 @@ const safePercent = (value: number, total: number) => {
   return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
 };
 
+const formatSafeDate = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString();
+};
+
 export default function OfficeDashboardPage() {
   const { profile } = useEnterpriseAccess();
   const [loading, setLoading] = useState(true);
@@ -170,25 +178,41 @@ export default function OfficeDashboardPage() {
 
     const refresh = async () => {
       setLoading(true);
-      const [analytics, poRes, prRes, vendorRes, dbPing] = await Promise.all([
-        loadOfficeAnalyticsData(),
-        supabase.from("asset_purchase_orders").select("id, status, total_amount, vendor_name, expected_delivery_date, created_at").order("created_at", { ascending: false }).limit(120),
-        supabase.from("asset_purchase_requests").select("id, status, amount, created_at").order("created_at", { ascending: false }).limit(120),
-        supabase.from("asset_vendors").select("id, name, on_time_delivery_rate, rating").limit(100),
-        supabase.from("assets").select("id", { head: true, count: "exact" }).limit(1),
-      ]);
+      try {
+        const [analytics, poRes, prRes, vendorRes, dbPing] = await Promise.all([
+          loadOfficeAnalyticsData().catch(() => null),
+          supabase.from("asset_purchase_orders").select("id, status, total_amount, vendor_name, expected_delivery_date, created_at").order("created_at", { ascending: false }).limit(120),
+          supabase.from("asset_purchase_requests").select("id, status, amount, created_at").order("created_at", { ascending: false }).limit(120),
+          supabase.from("asset_vendors").select("id, name, on_time_delivery_rate, rating").limit(100),
+          supabase.from("assets").select("id", { head: true, count: "exact" }).limit(1),
+        ]);
 
-      if (!active) return;
+        if (!active) return;
 
-      setDbHealthy(!dbPing.error);
-      setDataState({
-        insights: getDashboardInsights(analytics),
-        purchaseOrders: (poRes.data as PurchaseOrderRow[]) || [],
-        purchaseRequests: (prRes.data as PurchaseRequestRow[]) || [],
-        vendors: (vendorRes.data as VendorRow[]) || [],
-      });
-      setLastSync(new Date().toLocaleString());
-      setLoading(false);
+        const fallbackAnalytics = getDashboardInsights({ assets: [], assetExtensions: {}, employees: [], tickets: [], maintenance: [], assignments: [], activity: [] });
+
+        setDbHealthy(!dbPing.error);
+        setDataState({
+          insights: analytics ? getDashboardInsights(analytics) : fallbackAnalytics,
+          purchaseOrders: poRes.error ? [] : ((poRes.data as PurchaseOrderRow[]) || []),
+          purchaseRequests: prRes.error ? [] : ((prRes.data as PurchaseRequestRow[]) || []),
+          vendors: vendorRes.error ? [] : ((vendorRes.data as VendorRow[]) || []),
+        });
+        setLastSync(new Date().toLocaleString());
+      } catch {
+        if (!active) return;
+        setDbHealthy(false);
+        setDataState({
+          insights: getDashboardInsights({ assets: [], assetExtensions: {}, employees: [], tickets: [], maintenance: [], assignments: [], activity: [] }),
+          purchaseOrders: [],
+          purchaseRequests: [],
+          vendors: [],
+        });
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
     };
 
     void refresh();
@@ -218,6 +242,14 @@ export default function OfficeDashboardPage() {
   const statusSeries = useMemo(
     () => (analytics.maintenanceStatus.length ? analytics.maintenanceStatus : noData),
     [analytics.maintenanceStatus]
+  );
+
+  const maintenanceTrend = useMemo(
+    () => {
+      const trend = seriesByMonth(analytics.recentActivity.filter((row) => row.kind === "Maintenance").map((row) => row.when));
+      return trend.length ? trend : noData;
+    },
+    [analytics.recentActivity]
   );
 
   const purchaseTrend = useMemo(
@@ -572,10 +604,11 @@ export default function OfficeDashboardPage() {
         </div>
       </section>
 
+      <DashboardWidgetBoundary widgetName="Analytics Section">
       <section style={styles.section}>
         <SectionTitle title="Analytics Section" subtitle="Interactive analytics for executive planning and drill-down." />
         <div style={styles.chartGrid}>
-          <ChartPanel title="Asset Growth" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path}>
+          <ChartPanel title="Asset Growth" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetGrowth.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={analytics.assetGrowth.length ? analytics.assetGrowth : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -587,7 +620,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Assets by Category" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path}>
+          <ChartPanel title="Assets by Category" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByCategory.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={analytics.assetsByCategory.length ? analytics.assetsByCategory : noData} dataKey="value" nameKey="label" innerRadius={48} outerRadius={90}>
@@ -601,7 +634,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Assets by Department" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path}>
+          <ChartPanel title="Assets by Department" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByDepartment.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={analytics.assetsByDepartment.length ? analytics.assetsByDepartment : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -613,7 +646,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Asset Status" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path}>
+          <ChartPanel title="Asset Status" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={statusSeries !== noData}>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={statusSeries} dataKey="value" nameKey="label" innerRadius={48} outerRadius={90}>
@@ -627,7 +660,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Monthly Assignment Trend" href={OFFICE_ANALYTICS_METRICS["assigned-assets"].path}>
+          <ChartPanel title="Monthly Assignment Trend" href={OFFICE_ANALYTICS_METRICS["assigned-assets"].path} hasData={analytics.monthlyAssignments.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={analytics.monthlyAssignments.length ? analytics.monthlyAssignments : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -639,7 +672,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Warranty Timeline" href={OFFICE_ANALYTICS_METRICS["warranty-expiring"].path}>
+          <ChartPanel title="Warranty Timeline" href={OFFICE_ANALYTICS_METRICS["warranty-expiring"].path} hasData={analytics.warrantyForecast.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={analytics.warrantyForecast.length ? analytics.warrantyForecast : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -651,9 +684,9 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Maintenance Trend" href={OFFICE_ANALYTICS_METRICS["maintenance-due"].path}>
+          <ChartPanel title="Maintenance Trend" href={OFFICE_ANALYTICS_METRICS["maintenance-due"].path} hasData={maintenanceTrend !== noData}>
             <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={seriesByMonth(analytics.recentActivity.filter((row) => row.kind === "Maintenance").map((row) => row.when))}>
+              <AreaChart data={maintenanceTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
                 <XAxis dataKey="label" tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
                 <YAxis allowDecimals={false} tick={{ fill: theme === "dark" ? "#9fb1c4" : "#64748b" }} />
@@ -663,7 +696,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Purchase Trend" href="/office/purchase-orders">
+          <ChartPanel title="Purchase Trend" href="/office/purchase-orders" hasData={purchaseTrend.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={purchaseTrend.length ? purchaseTrend : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -675,7 +708,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Employee Distribution" href={OFFICE_ANALYTICS_METRICS.employees.path}>
+          <ChartPanel title="Employee Distribution" href={OFFICE_ANALYTICS_METRICS.employees.path} hasData={employeeDeptSeries.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={employeeDeptSeries.length ? employeeDeptSeries : noData} dataKey="value" nameKey="label" innerRadius={48} outerRadius={90}>
@@ -689,7 +722,7 @@ export default function OfficeDashboardPage() {
             </ResponsiveContainer>
           </ChartPanel>
 
-          <ChartPanel title="Department Asset Allocation" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path}>
+          <ChartPanel title="Department Asset Allocation" href={OFFICE_ANALYTICS_METRICS["total-office-assets"].path} hasData={analytics.assetsByDepartment.length > 0}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={analytics.assetsByDepartment.length ? analytics.assetsByDepartment : noData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === "dark" ? "#243244" : "#dbeafe"} />
@@ -702,7 +735,9 @@ export default function OfficeDashboardPage() {
           </ChartPanel>
         </div>
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Operational Status">
       <section style={styles.section}>
         <SectionTitle title="Operational Status" subtitle="Immediate operational movement across assets and maintenance." />
         <div style={styles.grid4}>
@@ -711,25 +746,33 @@ export default function OfficeDashboardPage() {
           ))}
         </div>
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Support Procurement Inventory">
       <section style={styles.grid3}>
         <MetricListCard title="Support Center" icon={<Ticket size={17} />} metrics={supportStats} theme={theme} />
         <MetricListCard title="Procurement Overview" icon={<ShoppingCart size={17} />} metrics={procurementStats} theme={theme} />
         <MetricListCard title="Inventory Overview" icon={<Layers3 size={17} />} metrics={inventoryStats} theme={theme} />
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Employee Lifecycle Activity">
       <section style={styles.grid3}>
         <MetricListCard title="Employee Overview" icon={<Users size={17} />} metrics={employeeStats} theme={theme} />
         <TimelineCard title="Asset Lifecycle" stages={lifecycle} theme={theme} />
         <MiniListCard title="Recent Activity Feed" rows={analytics.recentActivity.slice(0, 7)} theme={theme} />
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Tasks Insights Calendar">
       <section style={styles.grid3}>
         <MetricListCard title="Upcoming Tasks" icon={<ClipboardCheck size={17} />} metrics={tasks} theme={theme} />
         <InsightCard title="AI Insights" insights={aiInsights} theme={theme} />
         <MetricListCard title="Calendar Widget" icon={<CalendarDays size={17} />} metrics={calendarItems.map((item) => ({ label: item.label, value: item.detail }))} theme={theme} />
       </section>
+      </DashboardWidgetBoundary>
 
+      <DashboardWidgetBoundary widgetName="Health Reports Footer">
       <section style={styles.grid3}>
         <MetricListCard title="Office Health Dashboard" icon={<MonitorCog size={17} />} metrics={health.map((item) => ({ label: item.label, value: item.value }))} theme={theme} />
         <div style={{ ...styles.card, ...sectionTone.card }}>
@@ -759,6 +802,7 @@ export default function OfficeDashboardPage() {
           </div>
         </div>
       </section>
+      </DashboardWidgetBoundary>
     </div>
   );
 }
@@ -786,14 +830,14 @@ function KpiCard({ metric, theme }: { metric: MetricCard; theme: UiTheme }) {
   );
 }
 
-function ChartPanel({ title, href, children }: { title: string; href: string; children: ReactNode }) {
+function ChartPanel({ title, href, hasData, children }: { title: string; href: string; hasData: boolean; children: ReactNode }) {
   return (
     <Link href={href} style={styles.chartCard}>
       <div style={styles.cardTitleRow}>
         <h3 style={styles.cardTitle}>{title}</h3>
         <span style={styles.kpiBadge}>Drill Down</span>
       </div>
-      {children}
+      {hasData ? children : <div style={styles.chartEmpty}>Waiting for data...</div>}
     </Link>
   );
 }
@@ -813,7 +857,7 @@ function MiniListCard({ title, rows, theme }: { title: string; rows: Array<{ lab
                 <strong style={{ ...(theme === "dark" ? dark.textStrong : light.textStrong), fontSize: 13 }}>{row.label}</strong>
                 <p style={{ margin: "6px 0 0", color: theme === "dark" ? "#9db0c2" : "#64748b", fontSize: 12 }}>{row.detail}</p>
               </div>
-              <span style={styles.when}>{row.when ? new Date(row.when).toLocaleDateString() : "-"}</span>
+              <span style={styles.when}>{formatSafeDate(row.when)}</span>
             </div>
           ))
         ) : (
@@ -1097,6 +1141,17 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 11px",
     fontWeight: 700,
     fontSize: 13,
+  },
+  chartEmpty: {
+    minHeight: 250,
+    display: "grid",
+    placeItems: "center",
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: 700,
+    border: "1px dashed #cbd5e1",
+    borderRadius: 12,
+    background: "rgba(248, 250, 252, 0.8)",
   },
   footerGrid: { display: "grid", gap: 8 },
   footerItem: {
