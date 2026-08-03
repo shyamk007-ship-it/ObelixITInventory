@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, buildAuditDescription, createNotification } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";

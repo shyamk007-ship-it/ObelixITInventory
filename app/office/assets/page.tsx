@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 
 export default function OfficeAssetsPage() {
   redirect("/office/assets/register");
