@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ArrowRightLeft, CalendarClock, Package, Ticket, TriangleAlert, Users, Wrench, BadgeCheck, type LucideIcon } from "lucide-react";
 
@@ -11,9 +12,21 @@ interface OfficeStatsProps {
   criticalIssues: number;
   maintenanceDue: number;
   warrantyExpiring: number;
+  hrefs?: Partial<Record<OfficeStatKey, string>>;
 }
 
-const ITEMS: Array<{ key: keyof OfficeStatsProps; label: string; icon: LucideIcon }> = [
+type OfficeStatKey =
+  | "totalOfficeAssets"
+  | "assignedAssets"
+  | "availableAssets"
+  | "employees"
+  | "openTickets"
+  | "resolvedTickets"
+  | "criticalIssues"
+  | "maintenanceDue"
+  | "warrantyExpiring";
+
+const ITEMS: Array<{ key: OfficeStatKey; label: string; icon: LucideIcon }> = [
   { key: "totalOfficeAssets", label: "Total Office Assets", icon: Package },
   { key: "assignedAssets", label: "Assigned Assets", icon: ArrowRightLeft },
   { key: "availableAssets", label: "Available Assets", icon: Package },
@@ -29,13 +42,23 @@ export default function OfficeStats(props: OfficeStatsProps) {
   return (
     <section style={styles.grid}>
       {ITEMS.map((item) => (
-        <div key={item.key} style={styles.card}>
-          <div style={styles.iconWrap}>
-            <item.icon size={18} strokeWidth={2.2} />
+        props.hrefs?.[item.key] ? (
+          <Link key={item.key} href={props.hrefs[item.key] || "#"} style={styles.linkCard}>
+            <div style={styles.iconWrap}>
+              <item.icon size={18} strokeWidth={2.2} />
+            </div>
+            <p style={styles.label}>{item.label}</p>
+            <strong style={styles.value}>{props[item.key]}</strong>
+          </Link>
+        ) : (
+          <div key={item.key} style={styles.card}>
+            <div style={styles.iconWrap}>
+              <item.icon size={18} strokeWidth={2.2} />
+            </div>
+            <p style={styles.label}>{item.label}</p>
+            <strong style={styles.value}>{props[item.key]}</strong>
           </div>
-          <p style={styles.label}>{item.label}</p>
-          <strong style={styles.value}>{props[item.key]}</strong>
-        </div>
+        )
       ))}
     </section>
   );
@@ -56,6 +79,18 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
     display: "grid",
     gap: 8,
+  },
+  linkCard: {
+    textDecoration: "none",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,246,255,0.96) 100%)",
+    border: "1px solid rgba(191, 219, 254, 0.9)",
+    borderRadius: 18,
+    padding: 16,
+    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.07)",
+    display: "grid",
+    gap: 8,
+    transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
+    cursor: "pointer",
   },
   iconWrap: {
     width: 36,
