@@ -232,8 +232,29 @@ export default function OfficeSidebar() {
 
       <nav style={styles.nav} aria-label="Office navigation">
         {sections.map((section) => {
-          const opened = collapsed ? false : openSections[section.id] ?? true;
+          const isDashboardSection = section.id === "dashboard";
+          const opened = isDashboardSection ? true : collapsed ? false : openSections[section.id] ?? true;
           const sectionActive = section.id === activeSection;
+
+          if (isDashboardSection) {
+            const dashboardLink = section.links[0];
+            const dashboardActive = pathname === dashboardLink.href || pathname.startsWith(`${dashboardLink.href}/`);
+
+            return (
+              <section key={section.id} style={styles.section}>
+                <Link
+                  href={dashboardLink.href}
+                  style={{ ...styles.sectionHeaderLink, ...(dashboardActive ? styles.sectionHeaderActive : {}) }}
+                  title={collapsed ? dashboardLink.label : undefined}
+                >
+                  <span style={styles.sectionTitleWrap}>
+                    <dashboardLink.icon size={16} strokeWidth={2.1} />
+                    {!collapsed && <span style={styles.sectionTitle}>{dashboardLink.label}</span>}
+                  </span>
+                </Link>
+              </section>
+            );
+          }
 
           return (
             <section key={section.id} style={styles.section}>
@@ -368,6 +389,18 @@ const styles: Record<string, CSSProperties> = {
     color: "#e2e8f0",
     padding: "9px 10px",
     cursor: "pointer",
+  },
+  sectionHeaderLink: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    border: "1px solid rgba(148, 163, 184, 0.18)",
+    borderRadius: 10,
+    background: "#1e293b",
+    color: "#e2e8f0",
+    padding: "9px 10px",
+    textDecoration: "none",
   },
   sectionHeaderActive: {
     borderColor: "rgba(59, 130, 246, 0.55)",
