@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -544,6 +545,7 @@ export default function OfficeAssetRegisterPage() {
                       <td style={styles.td}>{extra?.remarks || "-"}</td>
                       <td style={styles.td}>
                         <div style={styles.actionsColumn}>
+                          <Link href={`/office/assets/${asset.id}`} style={styles.actionLink}>View</Link>
                           <button style={styles.actionButton} onClick={() => openEdit(asset)}>Edit</button>
                           <button style={styles.actionButton} onClick={() => void duplicateAsset(asset)}>Duplicate</button>
                           <button style={styles.actionDangerButton} onClick={() => void deleteAsset(asset)}>Delete</button>
@@ -644,6 +646,7 @@ const styles: Record<string, CSSProperties> = {
   td: { padding: 10, borderTop: "1px solid #e2e8f0", verticalAlign: "top", color: "#0f172a", fontSize: 12, whiteSpace: "pre-line" },
   emptyCell: { textAlign: "center", padding: 20, color: "#64748b" },
   actionsColumn: { display: "grid", gap: 6 },
+  actionLink: { border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc", color: "#0f172a", padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "none", textAlign: "center" },
   actionButton: { border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc", color: "#0f172a", padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   actionDangerButton: { border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#b91c1c", padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   link: { color: "#1d4ed8", fontWeight: 700, textDecoration: "none" },
