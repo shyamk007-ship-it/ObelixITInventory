@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import {
+  ArrowDownUp,
   BadgeCheck,
   BookOpen,
   Box,
@@ -115,9 +116,22 @@ const sections: NavSection[] = [
     title: "Inventory",
     icon: Boxes,
     links: [
-      { href: "/office/inventory/stock", label: "Stock", icon: Box },
+      { href: "/office/inventory/dashboard", label: "Inventory Dashboard", icon: LayoutDashboard },
+      { href: "/office/inventory/stock", label: "Stock Management", icon: Box },
+      { href: "/office/inventory/warehouses", label: "Warehouse Management", icon: Building2 },
+      { href: "/office/inventory/categories", label: "Categories", icon: FolderKanban },
+      { href: "/office/inventory/movements", label: "Stock Movements", icon: ArrowDownUp },
+      { href: "/office/inventory/requests", label: "Stock Requests", icon: ClipboardCheck },
+      { href: "/office/inventory/transfers", label: "Stock Transfers", icon: ArrowDownUp },
       { href: "/office/inventory/consumables", label: "Consumables", icon: PackageCheck },
-      { href: "/office/inventory/spare-parts", label: "Spare Parts", icon: Sparkles },
+      { href: "/office/inventory/receiving", label: "Purchase Receiving (GRN)", icon: Receipt },
+      { href: "/office/inventory/suppliers", label: "Suppliers", icon: PackageSearch },
+      { href: "/office/inventory/audit", label: "Inventory Audit", icon: ShieldCheck },
+      { href: "/office/inventory/cycle-count", label: "Cycle Count", icon: Gauge },
+      { href: "/office/inventory/barcode", label: "Barcode & QR", icon: Radio },
+      { href: "/office/inventory/low-stock", label: "Low Stock Center", icon: BadgeCheck },
+      { href: "/office/inventory/reports", label: "Inventory Reports", icon: FileBarChart2 },
+      { href: "/office/inventory/settings", label: "Inventory Settings", icon: UserCog },
     ],
   },
   {

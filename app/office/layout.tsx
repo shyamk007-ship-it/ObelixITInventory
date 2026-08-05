@@ -59,6 +59,10 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
     title: "People Operations",
     subtitle: "Manage employee lifecycle, attendance, visitors, performance, training, and HR compliance in one workspace.",
   },
+  inventory: {
+    title: "Inventory Workspace",
+    subtitle: "Manage inventory stock, warehouses, requests, transfers, receiving, audits, and analytics in one operational center.",
+  },
 };
 
 export default function OfficeLayout({ children }: { children: React.ReactNode }) {
