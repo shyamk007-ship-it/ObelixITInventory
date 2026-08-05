@@ -55,6 +55,10 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Recent Activity",
     subtitle: "Audit office actions, access events, and operational changes.",
   },
+  people: {
+    title: "People Operations",
+    subtitle: "Manage employee lifecycle, attendance, visitors, performance, training, and HR compliance in one workspace.",
+  },
 };
 
 export default function OfficeLayout({ children }: { children: React.ReactNode }) {
