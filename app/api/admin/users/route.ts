@@ -109,6 +109,13 @@ const toTextOrNull = (value: unknown) => {
   return text ? text : null;
 };
 
+const isValidEmail = (value: string) => /^(?:[a-z0-9._%+-]+)@(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value);
+
+const isDuplicateEmailError = (message: string | null | undefined) => {
+  const normalized = String(message || "").toLowerCase();
+  return normalized.includes("already") && (normalized.includes("registered") || normalized.includes("exists") || normalized.includes("email"));
+};
+
 const toBoolean = (value: unknown, fallback = false) => {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "boolean") return value;
@@ -359,6 +366,11 @@ const resolveEmail = async (userId: string): Promise<string | null> => {
 
 const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
   const supabaseAdmin = getSupabaseAdmin();
+
+  if (!String(payload.full_name || "").trim()) {
+    return { success: false as const, status: 400, error: "Full name is required." };
+  }
+
   const targetEmail = await resolveEmail(userId);
 
   if (!targetEmail) {
@@ -483,7 +495,16 @@ const deleteUserCore = async (userId: string) => {
     return { success: false as const, status: 403, error: "Owner account cannot be deleted." };
   }
 
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+  let publicUserId: string | null = null;
+  try {
+    publicUserId = await resolvePublicUserId(userId, targetEmail);
+  } catch {
+    publicUserId = null;
+  }
+
+  if (publicUserId) {
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
+  }
   await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
   await supabaseAdmin.from("workspace_mappings").delete().eq("user_id", userId);
   await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
@@ -512,6 +533,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Missing required fields." }, { status: 400 });
     }
 
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ success: false, error: "Invalid email address." }, { status: 400 });
+    }
+
     if (isOwnerEmail(email)) {
       return NextResponse.json({ success: false, error: "Owner account is managed automatically." }, { status: 400 });
     }
@@ -519,6 +544,9 @@ export async function POST(request: Request) {
     const officeState = await resolveOfficePermissionState(payload);
 
     const temporaryPassword = payload.temporary_password || `${Math.random().toString(36).slice(2)}Aa!9`;
+    if (temporaryPassword.length < 8) {
+      return NextResponse.json({ success: false, error: "Temporary password must be at least 8 characters." }, { status: 400 });
+    }
 
     const primaryAssignment = (payload.assignments || [])[0] || null;
     const createResult = await supabaseAdmin.auth.admin.createUser({
@@ -542,6 +570,13 @@ export async function POST(request: Request) {
     });
 
     if (createResult.error || !createResult.data.user) {
+      if (isDuplicateEmailError(createResult.error?.message)) {
+        return NextResponse.json(
+          { success: false, error: "A user with this email already exists." },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
         { success: false, error: createResult.error?.message || "Failed to create user." },
         { status: 500 }
@@ -727,13 +762,20 @@ export async function GET(request: Request) {
 
       const officeUserId = Number(officeUser?.id || 0);
       const officePermissionRow = officePermissionsByUserId.get(officeUserId) || null;
+      const metadataOfficeAdmin = Boolean(metadata.office_is_admin);
+      const metadataOfficeAccess = Boolean(metadata.office_access ?? true);
       const officeIsAdmin = isOwnerEmail(email)
         ? true
-        : Boolean(officeUser?.is_admin) || roleImpliesAdmin(role);
-      const officeAccess = officeIsAdmin || Boolean(officeUser?.office_access ?? true);
+        : Boolean(officeUser?.is_admin) || roleImpliesAdmin(role) || metadataOfficeAdmin;
+      const officeAccess = officeIsAdmin || Boolean(officeUser?.office_access ?? metadataOfficeAccess);
       const officePermissions = officeIsAdmin
         ? buildDefaultOfficePermissions(true)
-        : mapPermissionRowToState(officePermissionRow, false);
+        : officePermissionRow
+          ? mapPermissionRowToState(officePermissionRow, false)
+          : sanitizePermissionInput(
+              (metadata.office_permissions as Record<string, unknown> | null | undefined) || null,
+              false
+            );
 
       return {
         auth_user_id: authUser.id,
@@ -872,6 +914,10 @@ export async function PUT(request: Request) {
     const userId = String(body.user_id || "").trim();
     if (!userId) {
       return NextResponse.json({ success: false, error: "user_id is required." }, { status: 400 });
+    }
+
+    if (!String(body.full_name || "").trim()) {
+      return NextResponse.json({ success: false, error: "Full name is required." }, { status: 400 });
     }
 
     const result = await updateUserCore(userId, body);

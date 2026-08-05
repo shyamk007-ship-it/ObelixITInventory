@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import OfficeAssetModuleNav from "../../../components/office/OfficeAssetModuleNav";
+import { returnOfficeAsset } from "../../../lib/office-assignments-api";
 import { supabase } from "../../../lib/supabase";
 
 type ReturnRow = {
@@ -49,26 +50,15 @@ export default function OfficeAssetReturnsPage() {
   }, []);
 
   const processReturn = async (row: ReturnRow, outcome: "Returned" | "Lost" | "Damaged") => {
-    const now = new Date().toISOString().slice(0, 10);
-
-    const updateAssignment = await supabase
-      .from("assignment_records")
-      .update({ status: outcome, actual_return_date: now })
-      .eq("id", row.id);
-
-    if (updateAssignment.error) {
-      showToast(updateAssignment.error.message);
-      return;
-    }
-
-    const assetStatus = outcome === "Returned" ? "Available" : outcome;
-    const updateAsset = await supabase
-      .from("assets")
-      .update({ status: assetStatus, currently_assigned_to: null })
-      .eq("id", row.asset_id);
-
-    if (updateAsset.error) {
-      showToast(updateAsset.error.message);
+    try {
+      await returnOfficeAsset({
+        assignmentId: row.id,
+        assetId: row.asset_id,
+        employeeId: row.employee_id,
+        outcome,
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to update return workflow.");
       return;
     }
 

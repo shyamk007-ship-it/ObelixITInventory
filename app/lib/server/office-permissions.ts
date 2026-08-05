@@ -17,6 +17,24 @@ interface OfficeAccessResult {
   officeUserId: number | null;
 }
 
+const isRelationMissing = (message: string | null | undefined) => {
+  const normalized = String(message || "").toLowerCase();
+  return normalized.includes("does not exist") && (normalized.includes("office_users") || normalized.includes("office_permissions"));
+};
+
+const getMetadataPermissions = (metadata: Record<string, unknown> | null | undefined, isAdmin: boolean) => {
+  if (isAdmin) {
+    return buildDefaultOfficePermissions(true);
+  }
+
+  const rawPermissions = metadata?.office_permissions;
+  if (rawPermissions && typeof rawPermissions === "object" && !Array.isArray(rawPermissions)) {
+    return sanitizePermissionInput(rawPermissions as Record<string, unknown>, false);
+  }
+
+  return buildDefaultOfficePermissions(false);
+};
+
 const normalizeEmail = (value: string | null | undefined) => String(value || "").trim().toLowerCase();
 
 const roleCanAdmin = (value: string | null | undefined) => {
@@ -81,6 +99,9 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
   const supabaseAdmin = getSupabaseAdmin();
   const normalizedEmail = normalizeEmail(email);
 
+  const authLookup = await supabaseAdmin.auth.admin.getUserById(authUserId);
+  const authMetadata = (authLookup.data.user?.user_metadata || {}) as Record<string, unknown>;
+
   if (isOwnerEmail(normalizedEmail)) {
     return {
       isAdmin: true,
@@ -95,6 +116,15 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
     .select("id, auth_user_id, email, is_admin, office_access")
     .or(`auth_user_id.eq.${authUserId},email.ilike.${normalizedEmail}`)
     .maybeSingle();
+
+  if (officeUserLookup.error && !isRelationMissing(officeUserLookup.error.message)) {
+    return {
+      isAdmin: Boolean(authMetadata.office_is_admin),
+      officeAccess: Boolean(authMetadata.office_access ?? true),
+      permissions: getMetadataPermissions(authMetadata, Boolean(authMetadata.office_is_admin)),
+      officeUserId: null,
+    };
+  }
 
   const officeUser = officeUserLookup.data as
     | { id: number; auth_user_id: string; email: string; is_admin: boolean; office_access: boolean }
@@ -140,11 +170,14 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
 
   const hasOfficeWorkspace = (assignments.data || []).some((assignment) => String(assignment.workspace || "") === "office");
   const isAdmin = roleCanAdmin(publicUser?.role) || roleFromAssignments;
+  const metadataAdmin = Boolean(authMetadata.office_is_admin);
+  const effectiveAdmin = isAdmin || metadataAdmin;
+  const metadataAccess = Boolean(authMetadata.office_access ?? true);
 
   return {
-    isAdmin,
-    officeAccess: isAdmin || hasOfficeWorkspace,
-    permissions: buildDefaultOfficePermissions(isAdmin),
+    isAdmin: effectiveAdmin,
+    officeAccess: effectiveAdmin || hasOfficeWorkspace || metadataAccess,
+    permissions: getMetadataPermissions(authMetadata, effectiveAdmin),
     officeUserId: null,
   };
 }
@@ -176,6 +209,23 @@ export async function upsertOfficeUserAndPermissions({
 }) {
   const supabaseAdmin = getSupabaseAdmin();
 
+  const authLookup = await supabaseAdmin.auth.admin.getUserById(authUserId);
+  if (!authLookup.error && authLookup.data.user) {
+    const existingMetadata = (authLookup.data.user.user_metadata || {}) as Record<string, unknown>;
+    const metadataResult = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+      user_metadata: {
+        ...existingMetadata,
+        office_is_admin: isAdmin,
+        office_access: officeAccess,
+        office_permissions: permissions,
+      },
+    });
+
+    if (metadataResult.error) {
+      throw new Error(metadataResult.error.message);
+    }
+  }
+
   const upsertOfficeUser = await supabaseAdmin
     .from("office_users")
     .upsert(
@@ -196,6 +246,10 @@ export async function upsertOfficeUserAndPermissions({
     .select("id")
     .single();
 
+  if (upsertOfficeUser.error && isRelationMissing(upsertOfficeUser.error.message)) {
+    return null;
+  }
+
   if (upsertOfficeUser.error || !upsertOfficeUser.data?.id) {
     throw new Error(upsertOfficeUser.error?.message || "Failed to upsert office user.");
   }
@@ -210,6 +264,10 @@ export async function upsertOfficeUserAndPermissions({
     },
     { onConflict: "office_user_id" }
   );
+
+  if (permissionUpsert.error && isRelationMissing(permissionUpsert.error.message)) {
+    return officeUserId;
+  }
 
   if (permissionUpsert.error) {
     throw new Error(permissionUpsert.error.message);

@@ -187,6 +187,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
 
     const { userId } = await context.params;
     const payload = (await request.json()) as UpdateUserPayload;
+    if (!String(payload.full_name || "").trim()) {
+      return NextResponse.json({ success: false, error: "Full name is required." }, { status: 400 });
+    }
     const targetEmail = await resolveEmail(userId);
 
     if (!targetEmail) {
@@ -333,7 +336,16 @@ export async function DELETE(request: Request, context: { params: Promise<{ user
       return NextResponse.json({ success: false, error: "Owner account cannot be deleted." }, { status: 403 });
     }
 
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+    let publicUserId: string | null = null;
+    try {
+      publicUserId = await resolvePublicUserId(userId, targetEmail);
+    } catch {
+      publicUserId = null;
+    }
+
+    if (publicUserId) {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
+    }
     await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
     await supabaseAdmin.from("office_users").delete().eq("auth_user_id", userId);
 

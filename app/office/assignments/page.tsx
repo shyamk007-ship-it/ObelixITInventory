@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import OfficeAssetModuleNav from "../../components/office/OfficeAssetModuleNav";
+import { assignOfficeAsset, returnOfficeAsset } from "../../lib/office-assignments-api";
 import { supabase } from "../../lib/supabase";
 
 interface AssignmentRow {
@@ -22,6 +23,8 @@ interface AssetOption {
   asset_name: string;
   asset_tag: string;
   status?: string | null;
+  assigned_to?: number | null;
+  currently_assigned_to?: number | null;
 }
 
 interface EmployeeOption {
@@ -30,15 +33,15 @@ interface EmployeeOption {
   department?: string | null;
 }
 
-const assignmentStatuses = ["Assigned", "Returned", "Transferred", "Replaced"] as const;
-
 export default function OfficeAssignmentsPage() {
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ asset_id: "", employee_id: "", status: "Assigned", notes: "" });
+  const [form, setForm] = useState({ asset_id: "", employee_id: "", notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [returningId, setReturningId] = useState<number | null>(null);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -51,7 +54,11 @@ export default function OfficeAssignmentsPage() {
         .from("assignment_records")
         .select("id, asset_id, employee_id, status, assigned_date, actual_return_date, notes, assets(asset_name, asset_tag, status), employees(full_name, department)")
         .order("assigned_date", { ascending: false }),
-      supabase.from("assets").select("id, asset_name, asset_tag, status").is("vessel_id", null).order("asset_name", { ascending: true }),
+      supabase
+        .from("assets")
+        .select("id, asset_name, asset_tag, status, assigned_to, currently_assigned_to")
+        .is("vessel_id", null)
+        .order("asset_name", { ascending: true }),
       supabase.from("employees").select("id, full_name, department").order("full_name", { ascending: true }),
     ]);
 
@@ -64,7 +71,14 @@ export default function OfficeAssignmentsPage() {
     void load();
   }, []);
 
-  const availableAssets = useMemo(() => assets.filter((asset) => (asset.status || "").toLowerCase() !== "assigned"), [assets]);
+  const availableAssets = useMemo(
+    () =>
+      assets.filter((asset) => {
+        const assigned = (asset.status || "").toLowerCase() === "assigned";
+        return !assigned && asset.assigned_to === null && asset.currently_assigned_to === null;
+      }),
+    [assets]
+  );
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -82,35 +96,79 @@ export default function OfficeAssignmentsPage() {
       return;
     }
 
-    const selectedAsset = assets.find((asset) => asset.id === Number(form.asset_id));
-    if (!selectedAsset || (selectedAsset.status || "").toLowerCase() === "assigned") {
+    const assetId = Number.parseInt(form.asset_id, 10);
+    const employeeId = Number.parseInt(form.employee_id, 10);
+
+    if (!Number.isInteger(assetId) || assetId <= 0 || !Number.isInteger(employeeId) || employeeId <= 0) {
+      showToast("Invalid asset or employee ID.");
+      return;
+    }
+
+    console.log("[Assignment] assetId:", assetId);
+    console.log("[Assignment] employeeId:", employeeId);
+
+    const selectedAsset = assets.find((asset) => asset.id === assetId);
+    if (
+      !selectedAsset ||
+      (selectedAsset.status || "").toLowerCase() === "assigned" ||
+      selectedAsset.assigned_to !== null ||
+      selectedAsset.currently_assigned_to !== null
+    ) {
       showToast("This asset is already assigned.");
       return;
     }
 
-    const response = await supabase.from("assignment_records").insert([
-      {
-        asset_id: Number(form.asset_id),
-        employee_id: Number(form.employee_id),
-        status: form.status,
+    setSaving(true);
+    try {
+      await assignOfficeAsset({
+        assetId,
+        employeeId,
         notes: form.notes || null,
-        assigned_date: new Date().toISOString().slice(0, 10),
-      },
-    ]);
-
-    if (response.error) {
-      showToast(response.error.message);
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to save assignment record.");
+      setSaving(false);
       return;
     }
 
-    await supabase
-      .from("assets")
-      .update({ status: form.status === "Returned" ? "Available" : "Assigned", currently_assigned_to: Number(form.employee_id) })
-      .eq("id", Number(form.asset_id));
-
     showToast("Assignment saved.");
-    setForm({ asset_id: "", employee_id: "", status: "Assigned", notes: "" });
+    setForm({ asset_id: "", employee_id: "", notes: "" });
     await load();
+    window.dispatchEvent(new Event("itinventory:asset-assignment-updated"));
+    setSaving(false);
+  };
+
+  const returnAssignment = async (row: AssignmentRow) => {
+    const assetId = Number(row.asset_id);
+    const employeeId = Number(row.employee_id);
+
+    if (!Number.isInteger(assetId) || !Number.isInteger(employeeId)) {
+      showToast("Invalid assignment data.");
+      return;
+    }
+
+    console.log("[Assignment Return] assetId:", assetId);
+    console.log("[Assignment Return] employeeId:", employeeId);
+
+    setReturningId(row.id);
+    try {
+      await returnOfficeAsset({
+        assignmentId: row.id,
+        assetId,
+        employeeId,
+        outcome: "Returned",
+        notes: `Returned from assignment #${row.id}`,
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to process return.");
+      setReturningId(null);
+      return;
+    }
+
+    showToast("Asset returned.");
+    await load();
+    window.dispatchEvent(new Event("itinventory:asset-assignment-updated"));
+    setReturningId(null);
   };
 
   return (
@@ -148,16 +206,9 @@ export default function OfficeAssignmentsPage() {
               </option>
             ))}
           </select>
-          <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))} style={styles.input}>
-            {assignmentStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
           <textarea value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Notes" style={{ ...styles.input, minHeight: 94 }} />
-          <button style={styles.primaryButton} onClick={() => void createAssignment()}>
-            Save Assignment
+          <button style={styles.primaryButton} onClick={() => void createAssignment()} disabled={saving}>
+            {saving ? "Saving..." : "Save Assignment"}
           </button>
         </article>
 
@@ -175,12 +226,13 @@ export default function OfficeAssignmentsPage() {
                   <th style={styles.th}>Assigned</th>
                   <th style={styles.th}>Returned</th>
                   <th style={styles.th}>Notes</th>
+                  <th style={styles.th}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={styles.empty}>
+                    <td colSpan={8} style={styles.empty}>
                       No assignment history found.
                     </td>
                   </tr>
@@ -194,6 +246,20 @@ export default function OfficeAssignmentsPage() {
                       <td style={styles.td}>{row.assigned_date ? new Date(row.assigned_date).toLocaleDateString() : "-"}</td>
                       <td style={styles.td}>{row.actual_return_date ? new Date(row.actual_return_date).toLocaleDateString() : "-"}</td>
                       <td style={styles.td}>{row.notes || "-"}</td>
+                      <td style={styles.td}>
+                        {row.status === "Assigned" ? (
+                          <button
+                            type="button"
+                            style={styles.returnButton}
+                            onClick={() => void returnAssignment(row)}
+                            disabled={returningId === row.id}
+                          >
+                            {returningId === row.id ? "Returning..." : "Return"}
+                          </button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -222,6 +288,7 @@ const styles: Record<string, CSSProperties> = {
   cardTitle: { margin: 0, color: "#0f172a", fontSize: 18, fontWeight: 900 },
   input: { width: "100%", borderRadius: 14, border: "1px solid #cbd5e1", padding: "11px 12px", fontSize: 13, background: "white" },
   primaryButton: { border: "none", borderRadius: 14, background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", color: "white", padding: "12px 16px", fontWeight: 800, cursor: "pointer" },
+  returnButton: { border: "none", borderRadius: 10, background: "#0ea5e9", color: "white", padding: "7px 10px", fontWeight: 700, cursor: "pointer" },
   tableWrap: { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 14 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 800 },
   th: { textAlign: "left", padding: 10, background: "#f8fafc", fontSize: 12, textTransform: "uppercase", color: "#64748b", letterSpacing: "0.06em" },

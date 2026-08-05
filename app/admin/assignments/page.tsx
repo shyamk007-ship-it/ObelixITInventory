@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { assignOfficeAsset, returnOfficeAsset } from "../../lib/office-assignments-api";
 import { supabase } from "../../lib/supabase";
 import { createAuditLog, createNotification, buildAuditDescription } from "../../lib/audit";
 import { getUserProfile } from "../../lib/rbac";
@@ -143,35 +144,49 @@ export default function AssignmentsPage() {
       const employeeId = Number(selectedEmployee);
 
       const profile = await getUserProfile();
-      
-      const { data: insertData, error: insertError } = await supabase
-        .from("assignment_records")
-        .insert([
-          {
-            asset_id: assetId,
-            employee_id: employeeId,
-            assigned_by: profile?.full_name || "System",
-            assigned_date: assignmentDate,
-            expected_return_date: expectedReturnDate || null,
-            status: "Assigned",
-            notes: notes || null,
-          },
-        ])
-        .select();
+      let assignmentRecordId: number | null = null;
 
-      if (insertError) {
-        alert(insertError.message);
-        setLoading(false);
-        return;
-      }
+      if (workspaceScope === "office") {
+        const result = await assignOfficeAsset({
+          assetId,
+          employeeId,
+          assignedBy: profile?.full_name || "System",
+          expectedReturnDate: expectedReturnDate || null,
+          notes: notes || null,
+        });
+        assignmentRecordId = Number(result.assignmentId);
+      } else {
+        const { data: insertData, error: insertError } = await supabase
+          .from("assignment_records")
+          .insert([
+            {
+              asset_id: assetId,
+              employee_id: employeeId,
+              assigned_by: profile?.full_name || "System",
+              assigned_date: assignmentDate,
+              expected_return_date: expectedReturnDate || null,
+              status: "Assigned",
+              notes: notes || null,
+            },
+          ])
+          .select();
 
-      const { error: assetError } = await supabase
-        .from("assets")
-        .update({ status: "Assigned", currently_assigned_to: employeeId, last_assignment_date: assignmentDate })
-        .eq("id", assetId);
+        if (insertError) {
+          alert(insertError.message);
+          setLoading(false);
+          return;
+        }
 
-      if (assetError) {
-        console.error(assetError);
+        assignmentRecordId = Number(insertData?.[0]?.id || 0);
+
+        const { error: assetError } = await supabase
+          .from("assets")
+          .update({ status: "Assigned", assigned_to: employeeId, currently_assigned_to: employeeId, last_assignment_date: assignmentDate })
+          .eq("id", assetId);
+
+        if (assetError) {
+          console.error(assetError);
+        }
       }
 
       const assetName = assets.find((item) => item.id === assetId)?.asset_name || "Asset";
@@ -183,7 +198,7 @@ export default function AssignmentsPage() {
           event: "Assigned Asset",
           userName: profile?.full_name || "Unknown User",
           recordType: "assignment",
-          recordId: insertData?.[0]?.id,
+          recordId: assignmentRecordId,
           itemName: `${assetName} → ${employeeName}`,
           context: notes ? `Notes: ${notes}` : undefined,
         }),
@@ -195,7 +210,7 @@ export default function AssignmentsPage() {
         action: "Assigned Asset",
         createdBy: profile?.full_name,
         recordType: "assignment",
-        recordId: insertData?.[0]?.id,
+        recordId: assignmentRecordId,
       });
 
       setSelectedAsset("");
@@ -229,29 +244,39 @@ export default function AssignmentsPage() {
       const profile = await getUserProfile();
       const returnDate = todayDate;
 
-      const { error: updateError } = await supabase
-        .from("assignment_records")
-        .update({
-          status: returnStatus,
-          actual_return_date: returnDate,
-          notes: returnNotes || selectedAssignment.notes,
-        })
-        .eq("id", selectedAssignment.id);
+      if (workspaceScope === "office") {
+        await returnOfficeAsset({
+          assignmentId: Number(selectedAssignment.id),
+          assetId: Number(selectedAssignment.asset_id),
+          employeeId: Number(selectedAssignment.employee_id),
+          outcome: returnStatus,
+          notes: returnNotes || selectedAssignment.notes || null,
+        });
+      } else {
+        const { error: updateError } = await supabase
+          .from("assignment_records")
+          .update({
+            status: returnStatus,
+            actual_return_date: returnDate,
+            notes: returnNotes || selectedAssignment.notes,
+          })
+          .eq("id", selectedAssignment.id);
 
-      if (updateError) {
-        alert(updateError.message);
-        return;
-      }
+        if (updateError) {
+          alert(updateError.message);
+          return;
+        }
 
-      const newAssetStatus = returnStatus === "Returned" ? "Available" : returnStatus;
+        const newAssetStatus = returnStatus === "Returned" ? "Available" : returnStatus;
 
-      const { error: assetError } = await supabase
-        .from("assets")
-        .update({ status: newAssetStatus, currently_assigned_to: null })
-        .eq("id", selectedAssignment.asset_id);
+        const { error: assetError } = await supabase
+          .from("assets")
+          .update({ status: newAssetStatus, assigned_to: null, currently_assigned_to: null })
+          .eq("id", selectedAssignment.asset_id);
 
-      if (assetError) {
-        console.error(assetError);
+        if (assetError) {
+          console.error(assetError);
+        }
       }
 
       const assetName = selectedAssignment.assets?.asset_name || "Asset";

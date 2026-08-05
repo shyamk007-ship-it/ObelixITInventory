@@ -7,6 +7,7 @@ import { QRCodeSVG } from "qrcode.react";
 import OfficeAssetModuleNav from "../../../components/office/OfficeAssetModuleNav";
 import { createAuditLog, createNotificationIfNotExists, buildAuditDescription } from "../../../lib/audit";
 import { getUserProfile } from "../../../lib/rbac";
+import { assignOfficeAsset, returnOfficeAsset } from "../../../lib/office-assignments-api";
 import { supabase } from "../../../lib/supabase";
 
 type AssetDetail = {
@@ -304,7 +305,14 @@ export default function OfficeAssetDetailPage() {
     if (!asset) return;
     setStatusSaving(true);
     const nextStatus = statusForm.status || "Available";
-    const updateResponse = await supabase.from("assets").update({ status: nextStatus, currently_assigned_to: nextStatus === "Assigned" ? asset.currently_assigned_to : null }).eq("id", asset.id);
+    const updateResponse = await supabase
+      .from("assets")
+      .update({
+        status: nextStatus,
+        assigned_to: nextStatus === "Assigned" ? asset.currently_assigned_to : null,
+        currently_assigned_to: nextStatus === "Assigned" ? asset.currently_assigned_to : null,
+      })
+      .eq("id", asset.id);
 
     if (updateResponse.error) {
       showMessage(updateResponse.error.message);
@@ -325,26 +333,19 @@ export default function OfficeAssetDetailPage() {
 
     const profile = await getUserProfile();
     const employeeId = Number(assignmentForm.employee_id);
-    const now = new Date().toISOString().slice(0, 10);
-
-    const insertResponse = await supabase.from("assignment_records").insert([
-      {
-        asset_id: asset.id,
-        employee_id: employeeId,
-        assigned_by: profile?.full_name || "Office Admin",
-        assigned_date: now,
-        expected_return_date: assignmentForm.expected_return_date || null,
-        status: "Assigned",
+    try {
+      await assignOfficeAsset({
+        assetId: asset.id,
+        employeeId,
+        assignedBy: profile?.full_name || "Office Admin",
+        expectedReturnDate: assignmentForm.expected_return_date || null,
         notes: assignmentForm.notes || null,
-      },
-    ]);
-
-    if (insertResponse.error) {
-      showMessage(insertResponse.error.message);
+      });
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Failed to assign asset.");
       return;
     }
 
-    await supabase.from("assets").update({ status: "Assigned", currently_assigned_to: employeeId, last_assignment_date: now }).eq("id", asset.id);
     await appendLifecycleEvent("Assigned", `Assigned to ${employees.find((row) => row.id === employeeId)?.full_name || "employee"}`, assignmentForm.notes || null, extension?.location || null);
     await createNotificationIfNotExists({
       title: "Asset assigned",
@@ -367,18 +368,15 @@ export default function OfficeAssetDetailPage() {
     }
 
     const profile = await getUserProfile();
-    const now = new Date().toISOString().slice(0, 10);
-    const assetStatus = status === "Returned" ? "Available" : status;
-
-    const assignmentResponse = await supabase.from("assignment_records").update({ status, actual_return_date: now }).eq("id", activeAssignment.id);
-    if (assignmentResponse.error) {
-      showMessage(assignmentResponse.error.message);
-      return;
-    }
-
-    const assetResponse = await supabase.from("assets").update({ status: assetStatus, currently_assigned_to: null }).eq("id", asset.id);
-    if (assetResponse.error) {
-      showMessage(assetResponse.error.message);
+    try {
+      await returnOfficeAsset({
+        assignmentId: activeAssignment.id,
+        assetId: asset.id,
+        employeeId: activeAssignment.employee_id,
+        outcome: status,
+      });
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Failed to process return.");
       return;
     }
 

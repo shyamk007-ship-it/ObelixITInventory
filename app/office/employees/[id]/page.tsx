@@ -8,6 +8,7 @@ import OfficeAssetModuleNav from "../../../components/office/OfficeAssetModuleNa
 import { supabase } from "../../../lib/supabase";
 import { createAuditLog, createNotificationIfNotExists, buildAuditDescription } from "../../../lib/audit";
 import { getUserProfile } from "../../../lib/rbac";
+import { assignOfficeAsset, returnOfficeAsset } from "../../../lib/office-assignments-api";
 
 interface EmployeeRow {
   id: number;
@@ -335,23 +336,19 @@ export default function EmployeeDetailsPage() {
     }
 
     setSavingAction(true);
-    const assignmentDate = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supabase.from("assignment_records").insert([
-      {
-        asset_id: asset.id,
-        employee_id: employee.id,
-        status: "Assigned",
-        assigned_date: assignmentDate,
-      },
-    ]).select("id").single();
-
-    if (error) {
-      showToast(error.message);
+    let assignmentId: number | null = null;
+    try {
+      const result = await assignOfficeAsset({
+        assetId: asset.id,
+        employeeId: employee.id,
+      });
+      assignmentId = result.assignmentId;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to assign asset.");
       setSavingAction(false);
       return;
     }
 
-    await supabase.from("assets").update({ status: "Assigned", currently_assigned_to: employee.id }).eq("id", asset.id);
     const profile = await getUserProfile();
     await createAuditLog({
       action: "Asset Assigned",
@@ -369,7 +366,7 @@ export default function EmployeeDetailsPage() {
       action: "Asset Assigned",
       createdBy: profile?.full_name || undefined,
       recordType: "assignment",
-      recordId: data?.id,
+      recordId: assignmentId,
     });
 
     const meta = { ...employeeMeta, lastAssignAssetId: assignAssetId };
@@ -389,9 +386,18 @@ export default function EmployeeDetailsPage() {
     }
 
     setSavingAction(true);
-    const returnDate = new Date().toISOString().slice(0, 10);
-    await supabase.from("assignment_records").update({ status: "Returned", actual_return_date: returnDate }).eq("id", assignment.id);
-    await supabase.from("assets").update({ status: "Available", currently_assigned_to: null }).eq("id", assignment.asset_id);
+    try {
+      await returnOfficeAsset({
+        assignmentId: assignment.id,
+        assetId: assignment.asset_id,
+        employeeId: employee.id,
+        outcome: "Returned",
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to return asset.");
+      setSavingAction(false);
+      return;
+    }
 
     const profile = await getUserProfile();
     await createAuditLog({

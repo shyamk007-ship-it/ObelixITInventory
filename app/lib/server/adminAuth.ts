@@ -53,6 +53,10 @@ export async function requireAdminAccessFromRequest(request: Request) {
     return { ok: true as const, user };
   }
 
+  if (user.user_metadata?.office_is_admin === true) {
+    return { ok: true as const, user };
+  }
+
   const officeUser = await supabaseAdmin
     .from("office_users")
     .select("is_admin, office_access")

@@ -64,6 +64,7 @@ export default function OfficeUsersPage() {
   const [loginHistory, setLoginHistory] = useState<Array<{ id: number; created_at: string; action: string; description: string }>>([]);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<"create" | "save" | "reset" | "delete" | "load" | null>(null);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -202,9 +203,25 @@ export default function OfficeUsersPage() {
       return;
     }
 
+    const email = form.email.trim().toLowerCase();
+    if (!/^(?:[a-z0-9._%+-]+)@(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(email)) {
+      showToast("Please enter a valid email address.");
+      return;
+    }
+
+    if (form.temporary_password.length < 8) {
+      showToast("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (users.some((item) => item.email.trim().toLowerCase() === email)) {
+      showToast("A user with this email already exists.");
+      return;
+    }
+
     const payload: CreateUserPayload = {
       full_name: form.full_name,
-      email: form.email,
+      email,
       employee_id: form.employee_id || null,
       designation: form.designation || null,
       temporary_password: form.temporary_password,
@@ -230,6 +247,7 @@ export default function OfficeUsersPage() {
     };
 
     setSaving(true);
+    setActionLoading("create");
     try {
       const response = await fetchWithSession("/api/admin/users", {
         method: "POST",
@@ -251,12 +269,18 @@ export default function OfficeUsersPage() {
       showToast(error instanceof Error ? error.message : "Failed to create user.");
     } finally {
       setSaving(false);
+      setActionLoading(null);
     }
   };
 
   const saveChanges = async () => {
     if (!selectedUserId) {
       showToast("Select a user first.");
+      return;
+    }
+
+    if (!form.full_name.trim()) {
+      showToast("Full name is required.");
       return;
     }
 
@@ -287,6 +311,7 @@ export default function OfficeUsersPage() {
     };
 
     setSaving(true);
+    setActionLoading("save");
     try {
       const response = await fetchWithSession("/api/admin/users", {
         method: "PUT",
@@ -306,20 +331,28 @@ export default function OfficeUsersPage() {
       showToast(error instanceof Error ? error.message : "Failed to save user.");
     } finally {
       setSaving(false);
+      setActionLoading(null);
     }
   };
 
   const resetPassword = async () => {
     if (!selectedUserId) return;
 
-    const response = await fetchWithSession(`/api/admin/users/${selectedUserId}/reset-password`, { method: "POST" });
-    const payload = (await response.json()) as { success?: boolean; error?: string };
-    if (!response.ok || !payload.success) {
-      showToast(payload.error || "Failed to reset password.");
-      return;
-    }
+    setActionLoading("reset");
+    try {
+      const response = await fetchWithSession(`/api/admin/users/${selectedUserId}/reset-password`, { method: "POST" });
+      const payload = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !payload.success) {
+        showToast(payload.error || "Failed to reset password.");
+        return;
+      }
 
-    showToast("Password reset email/link generated.");
+      showToast("Password reset email/link generated.");
+    } catch {
+      showToast("Network error while resetting password.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const deleteUser = async () => {
@@ -328,24 +361,31 @@ export default function OfficeUsersPage() {
       return;
     }
 
-    const response = await fetchWithSession("/api/admin/users", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: selectedUserId }),
-    });
-    const payload = (await response.json()) as UsersApiResponse;
+    setActionLoading("delete");
+    try {
+      const response = await fetchWithSession("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: selectedUserId }),
+      });
+      const payload = (await response.json()) as UsersApiResponse;
 
-    if (!response.ok || !payload.success) {
-      showToast(payload.error || "Failed to delete user.");
-      return;
+      if (!response.ok || !payload.success) {
+        showToast(payload.error || "Failed to delete user.");
+        return;
+      }
+
+      setSelectedUserId(null);
+      setForm(createBlankForm());
+      setLoginHistory([]);
+      await loadUsers();
+      showToast("User deleted.");
+      window.dispatchEvent(new Event("itinventory:office-permissions-changed"));
+    } catch {
+      showToast("Network error while deleting user.");
+    } finally {
+      setActionLoading(null);
     }
-
-    setSelectedUserId(null);
-    setForm(createBlankForm());
-    setLoginHistory([]);
-    await loadUsers();
-    showToast("User deleted.");
-    window.dispatchEvent(new Event("itinventory:office-permissions-changed"));
   };
 
   const visiblePermissionModules = useMemo(() => {
@@ -376,8 +416,10 @@ export default function OfficeUsersPage() {
             placeholder="Search users"
             style={styles.input}
           />
-          <button type="button" onClick={() => setForm(createBlankForm())} style={styles.ghostButton}>New User</button>
-          <button type="button" onClick={createUser} style={styles.primaryButton} disabled={saving}>Create User</button>
+          <button type="button" onClick={() => setForm(createBlankForm())} style={styles.ghostButton} disabled={Boolean(actionLoading)}>New User</button>
+          <button type="button" onClick={createUser} style={styles.primaryButton} disabled={saving || Boolean(actionLoading)}>
+            {actionLoading === "create" ? "Creating..." : "Create User"}
+          </button>
         </div>
       </header>
 
@@ -390,6 +432,7 @@ export default function OfficeUsersPage() {
                 key={user.auth_user_id}
                 type="button"
                 onClick={() => void loadUserDetails(user.auth_user_id)}
+                disabled={Boolean(actionLoading)}
                 style={{
                   ...styles.userRow,
                   ...(selectedUserId === user.auth_user_id ? styles.userRowActive : {}),
@@ -504,10 +547,16 @@ export default function OfficeUsersPage() {
           </div>
 
           <div style={styles.buttonRow}>
-            <button type="button" style={styles.primaryButton} onClick={saveChanges} disabled={!selectedUserId || saving}>Save Changes</button>
-            <button type="button" style={styles.ghostButton} onClick={() => setForm(selectedUser ? toFormState(selectedUser) : createBlankForm())}>Cancel</button>
-            <button type="button" style={styles.ghostButton} onClick={resetPassword} disabled={!selectedUserId}>Reset Password</button>
-            <button type="button" style={styles.dangerButton} onClick={deleteUser} disabled={!selectedUserId}>Delete User</button>
+            <button type="button" style={styles.primaryButton} onClick={saveChanges} disabled={!selectedUserId || saving || Boolean(actionLoading)}>
+              {actionLoading === "save" ? "Saving..." : "Save Changes"}
+            </button>
+            <button type="button" style={styles.ghostButton} onClick={() => setForm(selectedUser ? toFormState(selectedUser) : createBlankForm())} disabled={Boolean(actionLoading)}>Cancel</button>
+            <button type="button" style={styles.ghostButton} onClick={resetPassword} disabled={!selectedUserId || Boolean(actionLoading)}>
+              {actionLoading === "reset" ? "Resetting..." : "Reset Password"}
+            </button>
+            <button type="button" style={styles.dangerButton} onClick={deleteUser} disabled={!selectedUserId || Boolean(actionLoading)}>
+              {actionLoading === "delete" ? "Deleting..." : "Delete User"}
+            </button>
           </div>
 
           <div style={styles.historyCard}>
