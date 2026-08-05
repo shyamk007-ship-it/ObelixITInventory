@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
+import { useOfficePermissions } from "./useOfficePermissions";
 
 export type PeoplePermission = {
   canView: boolean;
@@ -16,35 +16,27 @@ export type PeoplePermission = {
   canExport: boolean;
 };
 
-const normalizeRole = (value: string) => value.toLowerCase().replace(/\s+/g, "_");
-
 export function usePeoplePermissions(): PeoplePermission {
-  const { activeAssignment } = useEnterpriseAccess();
+  const { can } = useOfficePermissions();
 
   return useMemo(() => {
-    const role = normalizeRole(
-      String(activeAssignment?.roles?.role_name || activeAssignment?.role || "viewer")
-    );
-
-    const isSuper = role.includes("super_admin") || role === "super_admin";
-    const isAdmin = isSuper || role.includes("office_admin") || role === "admin";
-    const isHR = role.includes("hr");
-    const isManager = role.includes("manager") || role.includes("it_officer") || role.includes("it_staff");
-    const isEmployee = role.includes("employee") || role.includes("crew_member");
+    const employeeManage = can("employees_create") || can("employees_edit") || can("employees_delete");
+    const departmentsManage = can("departments_create") || can("departments_edit") || can("departments_delete");
+    const visitorsManage = can("visitors_create") || can("visitors_edit") || can("visitors_delete");
 
     return {
-      canView: true,
-      canManageEmployees: isAdmin || isHR,
-      canManageDepartments: isAdmin || isHR,
-      canManageVisitors: isAdmin || isHR || isManager,
-      canManageAttendance: isAdmin || isHR || isManager,
-      canManageLeave: isAdmin || isHR || isManager,
-      canManagePerformance: isAdmin || isHR || isManager,
-      canManageTraining: isAdmin || isHR,
-      canManageDocuments: isAdmin || isHR,
-      canExport: isAdmin || isHR || isManager || isEmployee,
+      canView: can("employees_view") || can("departments_view") || can("visitors_view"),
+      canManageEmployees: employeeManage,
+      canManageDepartments: departmentsManage,
+      canManageVisitors: visitorsManage,
+      canManageAttendance: employeeManage,
+      canManageLeave: employeeManage,
+      canManagePerformance: employeeManage,
+      canManageTraining: employeeManage,
+      canManageDocuments: employeeManage,
+      canExport: can("employees_export") || can("reports_export"),
     };
-  }, [activeAssignment?.role, activeAssignment?.roles?.role_name]);
+  }, [can]);
 }
 
 export function useToast() {

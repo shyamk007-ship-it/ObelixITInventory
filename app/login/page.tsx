@@ -11,6 +11,30 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const logSecurityEvent = async (action: "login" | "failed_login" | "password_reset", context: string, auditEmail?: string) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      await fetch("/api/office/audit/security", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action, context, email: auditEmail || email }),
+      });
+    } catch {
+      // Do not block login flow on audit failures.
+    }
+  };
+
   // LOGIN FUNCTION
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -24,6 +48,7 @@ export default function LoginPage() {
       });
 
     if (error) {
+      await logSecurityEvent("failed_login", "Invalid login credentials", email);
       setLoading(false);
       alert(error.message);
       return;
@@ -45,6 +70,8 @@ export default function LoginPage() {
     const {
       data: { user: authenticatedUser },
     } = await supabase.auth.getUser();
+
+    await logSecurityEvent("login", "User signed in", authenticatedUser?.email || email);
 
     const mustForcePasswordChange = Boolean(authenticatedUser?.user_metadata?.force_password_change);
 
@@ -78,6 +105,7 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
+      await logSecurityEvent("password_reset", "Password reset requested", email);
       alert("Password reset email sent");
     }
   };

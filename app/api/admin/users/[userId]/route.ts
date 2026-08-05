@@ -3,6 +3,13 @@ import { requireAdminAccessFromRequest } from "../../../../lib/server/adminAuth"
 import { getSupabaseAdmin } from "../../../../lib/server/supabaseAdmin";
 import type { RoleAssignmentInput, UpdateUserPayload } from "../../../../lib/user-management";
 import { isOwnerEmail } from "../../../../lib/rbac";
+import { buildDefaultOfficePermissions } from "../../../../lib/office-permissions";
+import {
+  createOfficePermissionAuditLog,
+  getRequestIp,
+  sanitizePermissionInput,
+  upsertOfficeUserAndPermissions,
+} from "../../../../lib/server/office-permissions";
 
 interface AdminAuditActor {
   id: string;
@@ -38,6 +45,19 @@ const toCanonicalRoleKey = (value: string | null | undefined) => {
   if (roleKey === "it_staff" || roleKey === "eto") return "it_officer";
 
   return roleKey;
+};
+
+const toBoolean = (value: unknown, fallback = false) => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return fallback;
+};
+
+const roleImpliesAdmin = (role: string | null | undefined) => {
+  const normalized = normalizeRoleKey(role);
+  return normalized === "super_admin" || normalized === "office_admin" || normalized === "admin";
 };
 
 const isMissingAuthUserIdColumnError = (message: string) =>
@@ -245,7 +265,45 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
       );
     }
 
+    try {
+      const isAdmin = toBoolean(payload.office_is_admin, roleImpliesAdmin(payload.role));
+      const officeAccess = toBoolean(payload.office_access, true) || isAdmin;
+      const permissions = sanitizePermissionInput(
+        (payload.office_permissions as Record<string, unknown> | null | undefined) || null,
+        isAdmin
+      );
+
+      await upsertOfficeUserAndPermissions({
+        authUserId: userId,
+        publicUserId: Number.isNaN(Number(publicUserId)) ? null : Number(publicUserId),
+        fullName: payload.full_name,
+        email: targetEmail,
+        employeeId: payload.employee_id || null,
+        department: payload.assignments?.[0]?.department || null,
+        designation: payload.designation || null,
+        status: payload.is_active ? "active" : "inactive",
+        isAdmin,
+        officeAccess,
+        permissions: isAdmin ? buildDefaultOfficePermissions(true) : permissions,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: error instanceof Error ? error.message : "Failed to update office permissions." },
+        { status: 500 }
+      );
+    }
+
     await createIamAuditLog(access.user as AdminAuditActor, "Patched User", targetEmail, `role=${payload.role}`);
+    await createOfficePermissionAuditLog({
+      actorAuthUserId: access.user?.id || null,
+      actorEmail: access.user?.email || null,
+      targetAuthUserId: userId,
+      targetEmail,
+      action: "User Updated",
+      module: "users",
+      context: "Profile and permission matrix updated",
+      ipAddress: getRequestIp(request),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -256,10 +314,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
   }
 }
 
-export async function DELETE(_request: Request, context: { params: Promise<{ userId: string }> }) {
+export async function DELETE(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
-    const access = await requireAdminAccessFromRequest(_request);
+    const access = await requireAdminAccessFromRequest(request);
     if (!access.ok) {
       return access.response;
     }
@@ -277,6 +335,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ use
 
     await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
     await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
+    await supabaseAdmin.from("office_users").delete().eq("auth_user_id", userId);
 
     const result = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (result.error) {
@@ -284,6 +343,16 @@ export async function DELETE(_request: Request, context: { params: Promise<{ use
     }
 
     await createIamAuditLog(access.user as AdminAuditActor, "Deleted User", targetEmail, "Account removed");
+    await createOfficePermissionAuditLog({
+      actorAuthUserId: access.user?.id || null,
+      actorEmail: access.user?.email || null,
+      targetAuthUserId: userId,
+      targetEmail,
+      action: "User Deleted",
+      module: "users",
+      context: "Office account deleted",
+      ipAddress: getRequestIp(request),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

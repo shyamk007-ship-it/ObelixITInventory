@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAccessFromRequest } from "../../../../../lib/server/adminAuth";
 import { getSupabaseAdmin } from "../../../../../lib/server/supabaseAdmin";
 import { isOwnerEmail } from "../../../../../lib/rbac";
+import { createOfficePermissionAuditLog, getRequestIp } from "../../../../../lib/server/office-permissions";
 
 interface AdminAuditActor {
   id: string;
@@ -67,6 +68,16 @@ export async function POST(request: Request, context: { params: Promise<{ userId
       }
 
       await createIamAuditLog(access.user as AdminAuditActor, "Set Password", email, "Password changed by admin");
+      await createOfficePermissionAuditLog({
+        actorAuthUserId: (access.user as AdminAuditActor)?.id || null,
+        actorEmail: (access.user as AdminAuditActor)?.email || null,
+        targetAuthUserId: userId,
+        targetEmail: email,
+        action: "PASSWORD_RESET",
+        module: "users",
+        context: "Password set by admin",
+        ipAddress: getRequestIp(request),
+      });
 
       return NextResponse.json({ success: true });
     }
@@ -90,6 +101,16 @@ export async function POST(request: Request, context: { params: Promise<{ userId
       }
 
       await createIamAuditLog(access.user as AdminAuditActor, locked ? "Locked User" : "Unlocked User", email, `locked=${locked}`);
+      await createOfficePermissionAuditLog({
+        actorAuthUserId: (access.user as AdminAuditActor)?.id || null,
+        actorEmail: (access.user as AdminAuditActor)?.email || null,
+        targetAuthUserId: userId,
+        targetEmail: email,
+        action: locked ? "USER_LOCKED" : "USER_UNLOCKED",
+        module: "users",
+        context: `locked=${locked}`,
+        ipAddress: getRequestIp(request),
+      });
       return NextResponse.json({ success: true, is_locked: locked });
     }
 
@@ -101,6 +122,16 @@ export async function POST(request: Request, context: { params: Promise<{ userId
 
       await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
       await createIamAuditLog(access.user as AdminAuditActor, "Force Logout", email, "Revoked all sessions");
+      await createOfficePermissionAuditLog({
+        actorAuthUserId: (access.user as AdminAuditActor)?.id || null,
+        actorEmail: (access.user as AdminAuditActor)?.email || null,
+        targetAuthUserId: userId,
+        targetEmail: email,
+        action: "FORCE_LOGOUT",
+        module: "users",
+        context: "All sessions revoked",
+        ipAddress: getRequestIp(request),
+      });
       return NextResponse.json({ success: true });
     }
 

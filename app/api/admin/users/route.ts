@@ -8,6 +8,17 @@ import type {
 } from "../../../lib/user-management";
 import { isOwnerEmail } from "../../../lib/rbac";
 import { matchesUserWorkspace, type WorkspaceView } from "../../../lib/workspace";
+import {
+  buildDefaultOfficePermissions,
+  mapPermissionRowToState,
+  OfficePermissionState,
+} from "../../../lib/office-permissions";
+import {
+  createOfficePermissionAuditLog,
+  getRequestIp,
+  sanitizePermissionInput,
+  upsertOfficeUserAndPermissions,
+} from "../../../lib/server/office-permissions";
 
 interface AdminAuditActor {
   id: string;
@@ -96,6 +107,70 @@ const extractRoleLookup = (value: unknown) => {
 const toTextOrNull = (value: unknown) => {
   const text = String(value || "").trim();
   return text ? text : null;
+};
+
+const toBoolean = (value: unknown, fallback = false) => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return fallback;
+};
+
+const roleImpliesAdmin = (role: string | null | undefined) => {
+  const normalized = normalizeRoleKey(role);
+  return normalized === "super_admin" || normalized === "office_admin" || normalized === "admin";
+};
+
+const resolveCopyPermissions = async (authUserId: string): Promise<OfficePermissionState | null> => {
+  const supabaseAdmin = getSupabaseAdmin();
+  const sourceUser = await supabaseAdmin
+    .from("office_users")
+    .select("id, is_admin")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (sourceUser.error || !sourceUser.data?.id) {
+    return null;
+  }
+
+  const sourcePermissions = await supabaseAdmin
+    .from("office_permissions")
+    .select("*")
+    .eq("office_user_id", sourceUser.data.id)
+    .maybeSingle();
+
+  return mapPermissionRowToState(
+    (sourcePermissions.data as Record<string, unknown> | null) || null,
+    Boolean(sourceUser.data.is_admin)
+  );
+};
+
+const resolveOfficePermissionState = async (payload: CreateUserPayload) => {
+  const isAdmin = toBoolean(payload.office_is_admin, roleImpliesAdmin(payload.role));
+  const officeAccess = toBoolean(payload.office_access, true);
+
+  if (payload.copy_permissions_from_user_id) {
+    const copied = await resolveCopyPermissions(payload.copy_permissions_from_user_id);
+    if (copied) {
+      return {
+        isAdmin,
+        officeAccess: officeAccess || isAdmin,
+        permissions: isAdmin ? buildDefaultOfficePermissions(true) : copied,
+      };
+    }
+  }
+
+  const permissions = sanitizePermissionInput(
+    (payload.office_permissions as Record<string, unknown> | null | undefined) || null,
+    isAdmin
+  );
+
+  return {
+    isAdmin,
+    officeAccess: officeAccess || isAdmin,
+    permissions,
+  };
 };
 
 const isMissingAuthUserIdColumnError = (message: string) =>
@@ -370,6 +445,29 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
     };
   }
 
+  try {
+    const officeState = await resolveOfficePermissionState(payload);
+    await upsertOfficeUserAndPermissions({
+      authUserId: userId,
+      publicUserId: Number.isNaN(Number(publicUserId)) ? null : Number(publicUserId),
+      fullName: payload.full_name,
+      email: targetEmail,
+      employeeId: payload.employee_id || null,
+      department: payload.assignments?.[0]?.department || null,
+      designation: payload.designation || null,
+      status: payload.is_active ? "active" : "inactive",
+      isAdmin: officeState.isAdmin,
+      officeAccess: officeState.officeAccess,
+      permissions: officeState.permissions,
+    });
+  } catch (error) {
+    return {
+      success: false as const,
+      status: 500,
+      error: error instanceof Error ? error.message : "Failed to update office permissions.",
+    };
+  }
+
   return { success: true as const, status: 200 };
 };
 
@@ -389,6 +487,7 @@ const deleteUserCore = async (userId: string) => {
   await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
   await supabaseAdmin.from("workspace_mappings").delete().eq("user_id", userId);
   await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
+  await supabaseAdmin.from("office_users").delete().eq("auth_user_id", userId);
 
   const result = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (result.error) {
@@ -416,6 +515,8 @@ export async function POST(request: Request) {
     if (isOwnerEmail(email)) {
       return NextResponse.json({ success: false, error: "Owner account is managed automatically." }, { status: 400 });
     }
+
+    const officeState = await resolveOfficePermissionState(payload);
 
     const temporaryPassword = payload.temporary_password || `${Math.random().toString(36).slice(2)}Aa!9`;
 
@@ -460,7 +561,30 @@ export async function POST(request: Request) {
       );
 
       await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+      await upsertOfficeUserAndPermissions({
+        authUserId: createResult.data.user.id,
+        publicUserId: Number.isNaN(Number(publicUserId)) ? null : Number(publicUserId),
+        fullName: payload.full_name,
+        email,
+        employeeId: payload.employee_id || null,
+        department: payload.assignments?.[0]?.department || null,
+        designation: payload.designation || null,
+        status: payload.is_active ? "active" : "inactive",
+        isAdmin: officeState.isAdmin,
+        officeAccess: officeState.officeAccess,
+        permissions: officeState.permissions,
+      });
       await createIamAuditLog(access.user as AdminAuditActor, "Created User", email, `role=${payload.role}`);
+      await createOfficePermissionAuditLog({
+        actorAuthUserId: access.user?.id || null,
+        actorEmail: access.user?.email || null,
+        targetAuthUserId: createResult.data.user.id,
+        targetEmail: email,
+        action: "User Created",
+        module: "users",
+        context: "Office user created with permission matrix",
+        ipAddress: getRequestIp(request),
+      });
     } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(createResult.data.user.id);
       return NextResponse.json(
@@ -492,7 +616,7 @@ export async function GET(request: Request) {
     const workspaceScope: WorkspaceView =
       requestedWorkspace === "office" || requestedWorkspace === "fleet" ? requestedWorkspace : "all";
 
-    const [authUsersResult, publicUsersResult, roleAssignmentsResult] = await Promise.all([
+    const [authUsersResult, publicUsersResult, roleAssignmentsResult, officeUsersResult, officePermissionsResult] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       supabaseAdmin
         .from("users")
@@ -502,6 +626,10 @@ export async function GET(request: Request) {
         .from("user_roles")
         .select("user_id, role_id, workspace, vessel_id, department, is_active, roles:role_id(id, role_name)")
         .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("office_users")
+        .select("id, auth_user_id, email, employee_id, department, designation, status, is_admin, office_access"),
+      supabaseAdmin.from("office_permissions").select("*"),
     ]);
 
     if (authUsersResult.error) {
@@ -526,9 +654,33 @@ export async function GET(request: Request) {
       assignmentsByUserId.get(userId)?.push(row);
     });
 
+    const officeUsersByAuth = new Map<string, Record<string, unknown>>();
+    const officeUsersByEmail = new Map<string, Record<string, unknown>>();
+    const officeUsers = (officeUsersResult.data || []) as Array<Record<string, unknown>>;
+    officeUsers.forEach((row) => {
+      const authUserId = String(row.auth_user_id || "").trim();
+      const rowEmail = String(row.email || "").trim().toLowerCase();
+      if (authUserId) {
+        officeUsersByAuth.set(authUserId, row);
+      }
+      if (rowEmail) {
+        officeUsersByEmail.set(rowEmail, row);
+      }
+    });
+
+    const officePermissionsByUserId = new Map<number, Record<string, unknown>>();
+    const officePermissions = (officePermissionsResult.data || []) as Array<Record<string, unknown>>;
+    officePermissions.forEach((row) => {
+      const officeUserId = Number(row.office_user_id || 0);
+      if (officeUserId > 0) {
+        officePermissionsByUserId.set(officeUserId, row);
+      }
+    });
+
     const records: UserManagementRecord[] = (authUsersResult.data?.users || []).map((authUser) => {
       const email = (authUser.email || "").trim().toLowerCase();
       const publicRow = publicByEmail.get(email);
+      const officeUser = officeUsersByAuth.get(authUser.id) || officeUsersByEmail.get(email) || null;
       const metadata = authUser.user_metadata || {};
       const publicUserId = publicRow?.id === null || publicRow?.id === undefined ? "" : String(publicRow.id);
       const publicAuthUserId = String(publicRow?.auth_user_id || "").trim();
@@ -573,6 +725,16 @@ export async function GET(request: Request) {
           ? false
           : Boolean(publicRow?.is_active ?? true);
 
+      const officeUserId = Number(officeUser?.id || 0);
+      const officePermissionRow = officePermissionsByUserId.get(officeUserId) || null;
+      const officeIsAdmin = isOwnerEmail(email)
+        ? true
+        : Boolean(officeUser?.is_admin) || roleImpliesAdmin(role);
+      const officeAccess = officeIsAdmin || Boolean(officeUser?.office_access ?? true);
+      const officePermissions = officeIsAdmin
+        ? buildDefaultOfficePermissions(true)
+        : mapPermissionRowToState(officePermissionRow, false);
+
       return {
         auth_user_id: authUser.id,
         full_name: String(publicRow?.full_name || metadata.full_name || authUser.email || "Unknown User"),
@@ -589,6 +751,10 @@ export async function GET(request: Request) {
         created_at: String(publicRow?.created_at || authUser.created_at || "") || null,
         last_sign_in_at: authUser.last_sign_in_at || null,
         assignments: assignmentSeed,
+        office_is_admin: officeIsAdmin,
+        office_access: officeAccess,
+        office_permissions: officePermissions,
+        office_department: String(officeUser?.department || "") || assignmentSeed[0]?.department || null,
       };
     });
 
@@ -664,6 +830,7 @@ export async function GET(request: Request) {
             is_locked: record.is_locked,
           },
           permissions: record.assignments,
+          office_permissions: record.office_permissions,
           workspace: record.assignments,
           activity: auditResult.data || [],
           devices: assignedAssetsResult.data || [],
@@ -715,6 +882,16 @@ export async function PUT(request: Request) {
     const targetEmail = await resolveEmail(userId);
     if (targetEmail) {
       await createIamAuditLog(access.user as AdminAuditActor, "Updated User", targetEmail, `role=${body.role}`);
+      await createOfficePermissionAuditLog({
+        actorAuthUserId: access.user?.id || null,
+        actorEmail: access.user?.email || null,
+        targetAuthUserId: userId,
+        targetEmail,
+        action: "User Updated",
+        module: "users",
+        context: "User profile/permissions updated",
+        ipAddress: getRequestIp(request),
+      });
     }
 
     return NextResponse.json({ success: true, user_id: userId });
@@ -739,12 +916,23 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, error: "user_id is required." }, { status: 400 });
     }
 
+    const targetEmail = await resolveEmail(userId);
     const result = await deleteUserCore(userId);
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
 
     await createIamAuditLog(access.user as AdminAuditActor, "Deleted User", userId, "Account removed");
+    await createOfficePermissionAuditLog({
+      actorAuthUserId: access.user?.id || null,
+      actorEmail: access.user?.email || null,
+      targetAuthUserId: userId,
+      targetEmail: targetEmail || null,
+      action: "User Deleted",
+      module: "users",
+      context: "User account removed",
+      ipAddress: getRequestIp(request),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

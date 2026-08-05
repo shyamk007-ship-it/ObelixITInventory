@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
+import { useOfficePermissions } from "./useOfficePermissions";
 
 export type InventoryPermission = {
   canView: boolean;
@@ -15,32 +15,24 @@ export type InventoryPermission = {
   canExport: boolean;
 };
 
-const normalizeRole = (value: string) => value.toLowerCase().replace(/\s+/g, "_");
-
 export function useInventoryPermissions(): InventoryPermission {
-  const { activeAssignment } = useEnterpriseAccess();
+  const { can } = useOfficePermissions();
 
   return useMemo(() => {
-    const role = normalizeRole(String(activeAssignment?.roles?.role_name || activeAssignment?.role || "viewer"));
-
-    const isSuper = role.includes("super_admin") || role === "super_admin";
-    const isAdmin = isSuper || role.includes("office_admin") || role === "admin";
-    const isInventory = role.includes("inventory");
-    const isManager = role.includes("manager") || role.includes("it_officer") || role.includes("it_staff");
-    const isEmployee = role.includes("employee") || role.includes("crew_member");
+    const inventoryManage = can("inventory_create") || can("inventory_edit") || can("inventory_delete");
 
     return {
-      canView: true,
-      canManageStock: isAdmin || isInventory || isManager,
-      canManageWarehouses: isAdmin || isInventory,
-      canManageRequests: isAdmin || isInventory || isManager || isEmployee,
-      canManageTransfers: isAdmin || isInventory || isManager,
-      canManageSuppliers: isAdmin || isInventory,
-      canManageAudits: isAdmin || isInventory || isManager,
-      canManageSettings: isAdmin,
-      canExport: isAdmin || isInventory || isManager,
+      canView: can("inventory_view") || can("warehouse_view"),
+      canManageStock: inventoryManage,
+      canManageWarehouses: can("warehouse_create") || can("warehouse_edit") || can("warehouse_delete"),
+      canManageRequests: inventoryManage || can("procurement_create") || can("procurement_edit"),
+      canManageTransfers: can("inventory_transfer"),
+      canManageSuppliers: can("suppliers_create") || can("suppliers_edit") || can("suppliers_delete"),
+      canManageAudits: can("inventory_edit"),
+      canManageSettings: can("settings_edit"),
+      canExport: can("inventory_export") || can("reports_export"),
     };
-  }, [activeAssignment?.role, activeAssignment?.roles?.role_name]);
+  }, [can]);
 }
 
 export function useToast() {

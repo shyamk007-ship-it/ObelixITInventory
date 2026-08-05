@@ -1,3 +1,5 @@
+import type { OfficePermissionState } from "./office-permissions";
+
 export type ManagedRole =
   | "super_admin"
   | "office_admin"
@@ -44,6 +46,10 @@ export interface UserManagementRecord {
   created_at: string | null;
   last_sign_in_at: string | null;
   assignments: RoleAssignmentInput[];
+  office_is_admin?: boolean;
+  office_access?: boolean;
+  office_permissions?: OfficePermissionState;
+  office_department?: string | null;
 }
 
 export interface CreateUserPayload {
@@ -58,6 +64,10 @@ export interface CreateUserPayload {
   is_active: boolean;
   force_password_change: boolean;
   assignments: RoleAssignmentInput[];
+  office_is_admin?: boolean;
+  office_access?: boolean;
+  office_permissions?: OfficePermissionState;
+  copy_permissions_from_user_id?: string | null;
 }
 
 export interface UpdateUserPayload {
@@ -70,4 +80,8 @@ export interface UpdateUserPayload {
   is_active: boolean;
   force_password_change: boolean;
   assignments: RoleAssignmentInput[];
+  office_is_admin?: boolean;
+  office_access?: boolean;
+  office_permissions?: OfficePermissionState;
+  copy_permissions_from_user_id?: string | null;
 }

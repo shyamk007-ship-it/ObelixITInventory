@@ -54,6 +54,25 @@ export default function ProfileMenu() {
   const handleLogout = async () => {
     setOpen(false);
 
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        await fetch("/api/office/audit/security", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "logout", context: "User signed out" }),
+        });
+      }
+    } catch {
+      // Do not block logout flow on audit failures.
+    }
+
     await createAuditLog({
       action: "Logout",
       description: buildAuditDescription({

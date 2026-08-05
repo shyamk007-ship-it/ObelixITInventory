@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAccessFromRequest } from "../../../../../lib/server/adminAuth";
 import { getSupabaseAdmin } from "../../../../../lib/server/supabaseAdmin";
 import { isOwnerEmail } from "../../../../../lib/rbac";
+import { createOfficePermissionAuditLog, getRequestIp } from "../../../../../lib/server/office-permissions";
 
 interface AdminAuditActor {
   id: string;
@@ -49,6 +50,17 @@ export async function POST(_request: Request, context: { params: Promise<{ userI
       action: "Reset Password",
       description: `Reset Password • ${email} • Recovery link generated • by ${getActorName(access.user as AdminAuditActor)}`,
       user_id: (access.user as AdminAuditActor)?.id || null,
+    });
+
+    await createOfficePermissionAuditLog({
+      actorAuthUserId: (access.user as AdminAuditActor)?.id || null,
+      actorEmail: (access.user as AdminAuditActor)?.email || null,
+      targetAuthUserId: userId,
+      targetEmail: email,
+      action: "PASSWORD_RESET",
+      module: "users",
+      context: "Admin generated password recovery link",
+      ipAddress: getRequestIp(_request),
     });
 
     return NextResponse.json({

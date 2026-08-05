@@ -9,6 +9,8 @@ import WorkspaceBreadcrumbs from "../components/shared/WorkspaceBreadcrumbs";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
 import { canAccessWorkspaceAssignments } from "../lib/rbac";
+import { getOfficeRoutePermission } from "../lib/office-permissions";
+import { useOfficePermissions } from "../hooks/useOfficePermissions";
 
 const routeMeta: Record<string, { title: string; subtitle: string }> = {
   dashboard: {
@@ -69,6 +71,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
   const { loading, profile, assignments, currentWorkspace } = useEnterpriseAccess();
+  const { loading: permissionLoading, officeAccess, can, isAdmin } = useOfficePermissions();
   const loggedAccess = useRef(false);
   const [lastSync, setLastSync] = useState(() => new Date());
 
@@ -86,7 +89,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    if (!canAccessWorkspaceAssignments(assignments, "office")) {
+    if (!canAccessWorkspaceAssignments(assignments, "office") || !officeAccess) {
       void createAuditLog({
         action: "Permission Denied",
         description: buildAuditDescription({
@@ -95,6 +98,22 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
           recordType: "route",
           itemName: "/office",
           context: "Workspace access denied",
+        }),
+      });
+      router.replace("/unauthorized");
+      return;
+    }
+
+    const requiredPermission = getOfficeRoutePermission(pathname);
+    if (requiredPermission && !isAdmin && !can(requiredPermission)) {
+      void createAuditLog({
+        action: "Permission Denied",
+        description: buildAuditDescription({
+          event: "Permission Denied",
+          userName: profile.full_name,
+          recordType: "permission",
+          itemName: requiredPermission,
+          context: pathname || "/office",
         }),
       });
       router.replace("/unauthorized");
@@ -114,7 +133,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
         }),
       });
     }
-  }, [loading, profile, assignments, currentWorkspace, router]);
+  }, [loading, profile, assignments, currentWorkspace, router, officeAccess, pathname, isAdmin, can]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -123,7 +142,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     return () => window.clearInterval(timer);
   }, []);
 
-  if (loading || !profile || !canAccessWorkspaceAssignments(assignments, "office")) {
+  if (loading || permissionLoading || !profile || !canAccessWorkspaceAssignments(assignments, "office") || !officeAccess) {
     return (
       <div style={styles.loading}>
         <p>Preparing Office workspace...</p>

@@ -53,6 +53,16 @@ export async function requireAdminAccessFromRequest(request: Request) {
     return { ok: true as const, user };
   }
 
+  const officeUser = await supabaseAdmin
+    .from("office_users")
+    .select("is_admin, office_access")
+    .or(`auth_user_id.eq.${user.id},email.ilike.${user.email}`)
+    .maybeSingle();
+
+  if (officeUser.data?.is_admin) {
+    return { ok: true as const, user };
+  }
+
   const publicUser = await supabaseAdmin
     .from("users")
     .select("id, email, role")

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAccessFromRequest } from "../../../../../lib/server/adminAuth";
 import { getSupabaseAdmin } from "../../../../../lib/server/supabaseAdmin";
 import { isOwnerEmail } from "../../../../../lib/rbac";
+import { createOfficePermissionAuditLog, getRequestIp } from "../../../../../lib/server/office-permissions";
 
 interface AdminAuditActor {
   id: string;
@@ -51,6 +52,17 @@ export async function POST(request: Request, context: { params: Promise<{ userId
       action: "Force Password Change",
       description: `Force Password Change • ${email} • enabled=${forcePasswordChange} • by ${getActorName(access.user as AdminAuditActor)}`,
       user_id: (access.user as AdminAuditActor)?.id || null,
+    });
+
+    await createOfficePermissionAuditLog({
+      actorAuthUserId: (access.user as AdminAuditActor)?.id || null,
+      actorEmail: (access.user as AdminAuditActor)?.email || null,
+      targetAuthUserId: userId,
+      targetEmail: email,
+      action: "PASSWORD_POLICY_UPDATED",
+      module: "users",
+      context: `force_password_change=${forcePasswordChange}`,
+      ipAddress: getRequestIp(request),
     });
 
     return NextResponse.json({ success: true });

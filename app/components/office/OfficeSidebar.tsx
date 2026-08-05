@@ -38,12 +38,15 @@ import {
   Wrench,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useOfficePermissions } from "../../hooks/useOfficePermissions";
+import type { OfficePermissionKey } from "../../lib/office-permissions";
 
 type NavLink = {
   href: string;
   label: string;
   icon: any;
   badgeKey?: "assets" | "employees" | "tickets" | "maintenance" | "vendors" | "po";
+  permission?: OfficePermissionKey;
 };
 
 type NavSection = {
@@ -58,18 +61,18 @@ const sections: NavSection[] = [
     id: "dashboard",
     title: "Dashboard",
     icon: LayoutDashboard,
-    links: [{ href: "/office/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    links: [{ href: "/office/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard_view" }],
   },
   {
     id: "asset-management",
     title: "Asset Management",
     icon: Package,
     links: [
-      { href: "/office/assets", label: "Assets", icon: Package, badgeKey: "assets" },
-      { href: "/office/assignments", label: "Assignments", icon: ClipboardCheck },
-      { href: "/office/assets/warranty", label: "Warranty", icon: ShieldCheck },
-      { href: "/office/maintenance", label: "Maintenance", icon: Wrench, badgeKey: "maintenance" },
-      { href: "/office/assets/reports", label: "Asset Reports", icon: FileBarChart2 },
+      { href: "/office/assets", label: "Assets", icon: Package, badgeKey: "assets", permission: "assets_view" },
+      { href: "/office/assignments", label: "Assignments", icon: ClipboardCheck, permission: "assets_view" },
+      { href: "/office/assets/warranty", label: "Warranty", icon: ShieldCheck, permission: "assets_view" },
+      { href: "/office/maintenance", label: "Maintenance", icon: Wrench, badgeKey: "maintenance", permission: "assets_view" },
+      { href: "/office/assets/reports", label: "Asset Reports", icon: FileBarChart2, permission: "reports_view" },
     ],
   },
   {
@@ -77,17 +80,17 @@ const sections: NavSection[] = [
     title: "People",
     icon: Users,
     links: [
-      { href: "/office/people/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/office/people/employees", label: "Employees", icon: Users, badgeKey: "employees" },
-      { href: "/office/people/departments", label: "Departments", icon: UsersRound },
-      { href: "/office/people/visitors", label: "Visitors", icon: BadgeCheck },
-      { href: "/office/people/attendance", label: "Attendance", icon: ClipboardCheck },
-      { href: "/office/people/leave", label: "Leave", icon: CalendarDays },
-      { href: "/office/people/performance", label: "Performance", icon: Gauge },
-      { href: "/office/people/training", label: "Training", icon: Sparkles },
-      { href: "/office/people/documents", label: "Documents", icon: FileText },
-      { href: "/office/people/organization-chart", label: "Organization Chart", icon: Building2 },
-      { href: "/office/people/reports", label: "Reports", icon: FileBarChart2 },
+      { href: "/office/people/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "employees_view" },
+      { href: "/office/people/employees", label: "Employees", icon: Users, badgeKey: "employees", permission: "employees_view" },
+      { href: "/office/people/departments", label: "Departments", icon: UsersRound, permission: "departments_view" },
+      { href: "/office/people/visitors", label: "Visitors", icon: BadgeCheck, permission: "visitors_view" },
+      { href: "/office/people/attendance", label: "Attendance", icon: ClipboardCheck, permission: "employees_view" },
+      { href: "/office/people/leave", label: "Leave", icon: CalendarDays, permission: "employees_view" },
+      { href: "/office/people/performance", label: "Performance", icon: Gauge, permission: "employees_view" },
+      { href: "/office/people/training", label: "Training", icon: Sparkles, permission: "employees_view" },
+      { href: "/office/people/documents", label: "Documents", icon: FileText, permission: "employees_view" },
+      { href: "/office/people/organization-chart", label: "Organization Chart", icon: Building2, permission: "employees_view" },
+      { href: "/office/people/reports", label: "Reports", icon: FileBarChart2, permission: "employees_export" },
     ],
   },
   {
@@ -95,9 +98,9 @@ const sections: NavSection[] = [
     title: "Support",
     icon: LifeBuoy,
     links: [
-      { href: "/office/tickets", label: "Tickets", icon: Ticket, badgeKey: "tickets" },
-      { href: "/office/knowledge-base", label: "Knowledge Base", icon: BookOpen },
-      { href: "/office/sla", label: "SLA", icon: Gauge },
+      { href: "/office/tickets", label: "Tickets", icon: Ticket, badgeKey: "tickets", permission: "employees_view" },
+      { href: "/office/knowledge-base", label: "Knowledge Base", icon: BookOpen, permission: "employees_view" },
+      { href: "/office/sla", label: "SLA", icon: Gauge, permission: "employees_view" },
     ],
   },
   {
@@ -105,10 +108,10 @@ const sections: NavSection[] = [
     title: "Procurement",
     icon: ShoppingCart,
     links: [
-      { href: "/office/purchase-requests", label: "Purchase Requests", icon: HandCoins },
-      { href: "/office/purchase-orders", label: "Purchase Orders", icon: Receipt, badgeKey: "po" },
-      { href: "/office/vendors", label: "Vendors", icon: PackageSearch, badgeKey: "vendors" },
-      { href: "/office/contracts", label: "Contracts", icon: FolderKanban },
+      { href: "/office/purchase-requests", label: "Purchase Requests", icon: HandCoins, permission: "procurement_view" },
+      { href: "/office/purchase-orders", label: "Purchase Orders", icon: Receipt, badgeKey: "po", permission: "purchase_orders_view" },
+      { href: "/office/vendors", label: "Vendors", icon: PackageSearch, badgeKey: "vendors", permission: "suppliers_view" },
+      { href: "/office/contracts", label: "Contracts", icon: FolderKanban, permission: "procurement_view" },
     ],
   },
   {
@@ -116,22 +119,22 @@ const sections: NavSection[] = [
     title: "Inventory",
     icon: Boxes,
     links: [
-      { href: "/office/inventory/dashboard", label: "Inventory Dashboard", icon: LayoutDashboard },
-      { href: "/office/inventory/stock", label: "Stock Management", icon: Box },
-      { href: "/office/inventory/warehouses", label: "Warehouse Management", icon: Building2 },
-      { href: "/office/inventory/categories", label: "Categories", icon: FolderKanban },
-      { href: "/office/inventory/movements", label: "Stock Movements", icon: ArrowDownUp },
-      { href: "/office/inventory/requests", label: "Stock Requests", icon: ClipboardCheck },
-      { href: "/office/inventory/transfers", label: "Stock Transfers", icon: ArrowDownUp },
-      { href: "/office/inventory/consumables", label: "Consumables", icon: PackageCheck },
-      { href: "/office/inventory/receiving", label: "Purchase Receiving (GRN)", icon: Receipt },
-      { href: "/office/inventory/suppliers", label: "Suppliers", icon: PackageSearch },
-      { href: "/office/inventory/audit", label: "Inventory Audit", icon: ShieldCheck },
-      { href: "/office/inventory/cycle-count", label: "Cycle Count", icon: Gauge },
-      { href: "/office/inventory/barcode", label: "Barcode & QR", icon: Radio },
-      { href: "/office/inventory/low-stock", label: "Low Stock Center", icon: BadgeCheck },
-      { href: "/office/inventory/reports", label: "Inventory Reports", icon: FileBarChart2 },
-      { href: "/office/inventory/settings", label: "Inventory Settings", icon: UserCog },
+      { href: "/office/inventory/dashboard", label: "Inventory Dashboard", icon: LayoutDashboard, permission: "inventory_view" },
+      { href: "/office/inventory/stock", label: "Stock Management", icon: Box, permission: "inventory_view" },
+      { href: "/office/inventory/warehouses", label: "Warehouse Management", icon: Building2, permission: "warehouse_view" },
+      { href: "/office/inventory/categories", label: "Categories", icon: FolderKanban, permission: "inventory_view" },
+      { href: "/office/inventory/movements", label: "Stock Movements", icon: ArrowDownUp, permission: "inventory_view" },
+      { href: "/office/inventory/requests", label: "Stock Requests", icon: ClipboardCheck, permission: "inventory_view" },
+      { href: "/office/inventory/transfers", label: "Stock Transfers", icon: ArrowDownUp, permission: "inventory_transfer" },
+      { href: "/office/inventory/consumables", label: "Consumables", icon: PackageCheck, permission: "inventory_view" },
+      { href: "/office/inventory/receiving", label: "Purchase Receiving (GRN)", icon: Receipt, permission: "inventory_create" },
+      { href: "/office/inventory/suppliers", label: "Suppliers", icon: PackageSearch, permission: "suppliers_view" },
+      { href: "/office/inventory/audit", label: "Inventory Audit", icon: ShieldCheck, permission: "inventory_edit" },
+      { href: "/office/inventory/cycle-count", label: "Cycle Count", icon: Gauge, permission: "inventory_edit" },
+      { href: "/office/inventory/barcode", label: "Barcode & QR", icon: Radio, permission: "inventory_view" },
+      { href: "/office/inventory/low-stock", label: "Low Stock Center", icon: BadgeCheck, permission: "inventory_view" },
+      { href: "/office/inventory/reports", label: "Inventory Reports", icon: FileBarChart2, permission: "inventory_export" },
+      { href: "/office/inventory/settings", label: "Inventory Settings", icon: UserCog, permission: "settings_edit" },
     ],
   },
   {
@@ -139,9 +142,9 @@ const sections: NavSection[] = [
     title: "Reports",
     icon: FileText,
     links: [
-      { href: "/office/analytics", label: "Analytics", icon: FileBarChart2 },
-      { href: "/office/reports/export", label: "Export", icon: FileText },
-      { href: "/office/reports/audit-logs", label: "Audit Logs", icon: ShieldCheck },
+      { href: "/office/analytics", label: "Analytics", icon: FileBarChart2, permission: "reports_view" },
+      { href: "/office/reports/export", label: "Export", icon: FileText, permission: "reports_export" },
+      { href: "/office/reports/audit-logs", label: "Audit Logs", icon: ShieldCheck, permission: "reports_view" },
     ],
   },
   {
@@ -149,10 +152,10 @@ const sections: NavSection[] = [
     title: "Administration",
     icon: UserCog,
     links: [
-      { href: "/office/users", label: "Users", icon: UsersRound },
-      { href: "/office/roles", label: "Roles", icon: ShieldCheck },
-      { href: "/office/settings", label: "Settings", icon: UserCog },
-      { href: "/office/company-profile", label: "Company Profile", icon: Building2 },
+      { href: "/office/users", label: "Users", icon: UsersRound, permission: "settings_edit" },
+      { href: "/office/roles", label: "Roles", icon: ShieldCheck, permission: "settings_edit" },
+      { href: "/office/settings", label: "Settings", icon: UserCog, permission: "settings_view" },
+      { href: "/office/company-profile", label: "Company Profile", icon: Building2, permission: "settings_edit" },
     ],
   },
 ];
@@ -170,6 +173,7 @@ const initialBadges: BadgeMap = {
 
 export default function OfficeSidebar() {
   const pathname = usePathname();
+  const { loading: permissionLoading, can } = useOfficePermissions();
   const [collapsed, setCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(sections.map((section) => [section.id, true]))
@@ -218,10 +222,23 @@ export default function OfficeSidebar() {
     void loadBadges();
   }, []);
 
+  const visibleSections = useMemo(() => {
+    if (permissionLoading) {
+      return sections;
+    }
+
+    return sections
+      .map((section) => ({
+        ...section,
+        links: section.links.filter((link) => (link.permission ? can(link.permission) : true)),
+      }))
+      .filter((section) => section.links.length > 0);
+  }, [can, permissionLoading]);
+
   const activeSection = useMemo(() => {
-    const current = sections.find((section) => section.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`)));
+    const current = visibleSections.find((section) => section.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`)));
     return current?.id || "dashboard";
-  }, [pathname]);
+  }, [pathname, visibleSections]);
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -254,7 +271,7 @@ export default function OfficeSidebar() {
       </div>
 
       <nav style={styles.nav} aria-label="Office navigation">
-        {sections.map((section) => {
+        {visibleSections.map((section) => {
           const isDashboardSection = section.id === "dashboard";
           const opened = isDashboardSection ? true : collapsed ? false : openSections[section.id] ?? true;
           const sectionActive = section.id === activeSection;
