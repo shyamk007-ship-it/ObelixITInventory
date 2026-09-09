@@ -113,8 +113,12 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
     .eq("is_active", true);
 
   let assignments: RoleAssignmentLookup[] = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
+  const hasUsableJoinedRoles = assignments.length === 0 || assignments.every((assignment) => {
+    const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
+    return Boolean(roleLookup?.role_name);
+  });
 
-  if (assignmentsLookup.error) {
+  if (assignmentsLookup.error || !hasUsableJoinedRoles) {
     const legacyAssignments = await supabaseAdmin
       .from("user_roles")
       .select("workspace, is_active, role")
