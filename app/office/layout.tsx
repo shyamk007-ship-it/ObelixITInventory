@@ -73,6 +73,9 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
   const { loading: permissionLoading, officeAccess, can, isAdmin } = useOfficePermissions();
   const loggedAccess = useRef(false);
   const [lastSync, setLastSync] = useState(() => new Date());
+  const profileIsSuperAdmin = profile?.role === "super_admin";
+  const effectiveIsAdmin = isAdmin || profileIsSuperAdmin;
+  const effectiveOfficeAccess = officeAccess || profileIsSuperAdmin;
 
   const headerMeta = useMemo(() => {
     const segments = (pathname || "/office/dashboard").split("/").filter(Boolean);
@@ -81,14 +84,14 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
   }, [pathname]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || permissionLoading) return;
 
     if (!profile) {
       router.replace("/login");
       return;
     }
 
-    if (!officeAccess) {
+    if (!effectiveOfficeAccess) {
       void createAuditLog({
         action: "Permission Denied",
         description: buildAuditDescription({
@@ -104,7 +107,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     }
 
     const requiredPermission = getOfficeRoutePermission(pathname);
-    if (requiredPermission && !isAdmin && !can(requiredPermission)) {
+    if (requiredPermission && !effectiveIsAdmin && !can(requiredPermission)) {
       void createAuditLog({
         action: "Permission Denied",
         description: buildAuditDescription({
@@ -132,7 +135,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
         }),
       });
     }
-  }, [loading, profile, assignments, currentWorkspace, router, officeAccess, pathname, isAdmin, can]);
+  }, [loading, permissionLoading, profile, assignments, currentWorkspace, router, effectiveOfficeAccess, pathname, effectiveIsAdmin, can]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -141,7 +144,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     return () => window.clearInterval(timer);
   }, []);
 
-  if (loading || permissionLoading || !profile || !officeAccess) {
+  if (loading || permissionLoading || !profile || !effectiveOfficeAccess) {
     return (
       <div style={styles.loading}>
         <p>Preparing Office workspace...</p>
