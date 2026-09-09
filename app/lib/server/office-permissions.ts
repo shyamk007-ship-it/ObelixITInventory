@@ -112,7 +112,20 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
     .eq("user_id", authUserId)
     .eq("is_active", true);
 
-  const assignments = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
+  let assignments: RoleAssignmentLookup[] = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
+
+  if (assignmentsLookup.error) {
+    const legacyAssignments = await supabaseAdmin
+      .from("user_roles")
+      .select("workspace, is_active, role")
+      .eq("user_id", authUserId)
+      .eq("is_active", true);
+
+    assignments = ((legacyAssignments.data || []) as Array<{ workspace?: string | null; role?: string | null }>).map((assignment) => ({
+      workspace: assignment.workspace,
+      roles: { role_name: assignment.role },
+    }));
+  }
   const hasSuperAdminRole = assignments.some((assignment) => {
     const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
     return String(roleLookup?.role_name || "").trim().toLowerCase() === "super_admin";
