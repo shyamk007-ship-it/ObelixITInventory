@@ -134,9 +134,9 @@ const resolvePublicUserId = async (_authUserId: string, email: string) => {
   return String(emailMatch.data.id);
 };
 
-const upsertUserRoleAssignments = async (publicUserId: string, assignments: RoleAssignmentInput[]) => {
+const upsertUserRoleAssignments = async (authUserId: string, assignments: RoleAssignmentInput[]) => {
   const supabaseAdmin = getSupabaseAdmin();
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", authUserId);
 
   if (assignments.length === 0) {
     return;
@@ -153,7 +153,7 @@ const upsertUserRoleAssignments = async (publicUserId: string, assignments: Role
     }
 
     return {
-    user_id: publicUserId,
+    user_id: authUserId,
     role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
@@ -260,7 +260,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
       }
 
     try {
-      await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+      await upsertUserRoleAssignments(userId, payload.assignments || []);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: error instanceof Error ? error.message : "Failed to update role assignments." },
@@ -344,7 +344,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ user
     }
 
     if (publicUserId) {
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
     }
     await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
     await supabaseAdmin.from("office_users").delete().eq("auth_user_id", userId);

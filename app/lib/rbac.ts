@@ -181,37 +181,10 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
   const user = await getAuthUser();
   if (!user) return [];
 
-  if (isOwnerEmail(user.email)) {
-    return [
-      {
-        id: 1,
-        user_id: user.id,
-        role_id: "",
-        role: "super_admin",
-        workspace: "company",
-        vessel_id: null,
-        department: "System Owner",
-        is_active: true,
-      },
-    ];
-  }
-
-  const userRecord = await supabase
-    .from("users")
-    .select("id")
-    .ilike("email", user.email || "")
-    .maybeSingle();
-
-  if (userRecord.error || userRecord.data?.id === null || userRecord.data?.id === undefined) {
-    return [];
-  }
-
-  const userId = String(userRecord.data.id);
-
   const { data, error } = await supabase
     .from("user_roles")
     .select("id, user_id, role_id, workspace, vessel_id, department, is_active, created_at, updated_at, roles:role_id(id, role_name)")
-    .eq("user_id", userId)
+    .eq("user_id", user.id)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
 
@@ -397,9 +370,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       id: userTable.data.id ?? 0,
       email: resolvedEmail,
       full_name: userTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: isOwnerEmail(resolvedEmail)
-        ? "super_admin"
-        : normalizeRole(userTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: normalizeRole(userTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
@@ -410,9 +381,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       id: usersProfilesTable.data.id ?? 0,
       email: resolvedEmail,
       full_name: usersProfilesTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: isOwnerEmail(resolvedEmail)
-        ? "super_admin"
-        : normalizeRole(usersProfilesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: normalizeRole(usersProfilesTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
@@ -423,9 +392,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       id: employeesTable.data.id ?? 0,
       email: resolvedEmail,
       full_name: employeesTable.data.full_name || user.user_metadata?.full_name || user.email,
-      role: isOwnerEmail(resolvedEmail)
-        ? "super_admin"
-        : normalizeRole(employeesTable.data.role ?? user.user_metadata?.role ?? "employee"),
+      role: normalizeRole(employeesTable.data.role ?? user.user_metadata?.role ?? "employee"),
     };
   }
 
@@ -434,7 +401,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
     id: 0,
     email: fallbackEmail,
     full_name: user.user_metadata?.full_name || user.email,
-    role: isOwnerEmail(fallbackEmail) ? "super_admin" : normalizeRole(user.user_metadata?.role ?? "employee"),
+    role: normalizeRole(user.user_metadata?.role ?? "employee"),
   };
 }
 

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { isOwnerEmail } from "../rbac";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 
 const MANAGE_USER_ROLES = new Set(["super_admin", "admin", "office_admin"]);
@@ -49,10 +48,6 @@ export async function requireAdminAccessFromRequest(request: Request) {
     };
   }
 
-  if (isOwnerEmail(user.email)) {
-    return { ok: true as const, user };
-  }
-
   if (user.user_metadata?.office_is_admin === true) {
     return { ok: true as const, user };
   }
@@ -67,23 +62,10 @@ export async function requireAdminAccessFromRequest(request: Request) {
     return { ok: true as const, user };
   }
 
-  const publicUser = await supabaseAdmin
-    .from("users")
-    .select("id, email, role")
-    .ilike("email", user.email)
-    .maybeSingle();
-
-  if (publicUser.error) {
-    return {
-      ok: false as const,
-      response: NextResponse.json({ success: false, error: publicUser.error.message }, { status: 500 }),
-    };
-  }
-
   const { data: assignments } = await supabaseAdmin
     .from("user_roles")
     .select("role_id, roles:role_id(id, role_name)")
-    .eq("user_id", String(publicUser.data?.id || ""))
+    .eq("user_id", user.id)
     .eq("is_active", true);
 
   const canManageFromAssignments = (assignments || []).some((assignment) => {
@@ -92,27 +74,6 @@ export async function requireAdminAccessFromRequest(request: Request) {
   });
 
   if (canManageFromAssignments) {
-    return { ok: true as const, user };
-  }
-
-  const userRecord = publicUser.data
-    ? { email: publicUser.data.email, role: publicUser.data.role }
-    : (
-        await supabaseAdmin
-          .from("users")
-          .select("email, role")
-          .ilike("email", user.email)
-          .maybeSingle()
-      ).data;
-
-  const fallbackRole =
-    typeof userRecord?.role === "string"
-      ? userRecord.role
-      : userRecord?.role === null || userRecord?.role === undefined
-        ? null
-        : String(userRecord.role);
-
-  if (MANAGE_USER_ROLES.has(normalizeRole(fallbackRole))) {
     return { ok: true as const, user };
   }
 

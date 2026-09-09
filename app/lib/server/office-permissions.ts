@@ -8,7 +8,6 @@ import {
   OFFICE_PERMISSION_KEYS,
   OfficePermissionState,
 } from "../office-permissions";
-import { isOwnerEmail } from "../rbac";
 
 interface OfficeAccessResult {
   isAdmin: boolean;
@@ -16,6 +15,11 @@ interface OfficeAccessResult {
   permissions: OfficePermissionState;
   officeUserId: number | null;
 }
+
+type RoleAssignmentLookup = {
+  workspace?: string | null;
+  roles?: { role_name?: string | null } | Array<{ role_name?: string | null }> | null;
+};
 
 const isRelationMissing = (message: string | null | undefined) => {
   const normalized = String(message || "").toLowerCase();
@@ -102,7 +106,22 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
   const authLookup = await supabaseAdmin.auth.admin.getUserById(authUserId);
   const authMetadata = (authLookup.data.user?.user_metadata || {}) as Record<string, unknown>;
 
-  if (isOwnerEmail(normalizedEmail)) {
+  const assignmentsLookup = await supabaseAdmin
+    .from("user_roles")
+    .select("workspace, is_active, roles:role_id(role_name)")
+    .eq("user_id", authUserId)
+    .eq("is_active", true);
+
+  const assignments = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
+  const hasSuperAdminRole = assignments.some((assignment) => {
+    const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
+    return String(roleLookup?.role_name || "").trim().toLowerCase() === "super_admin";
+  });
+  const hasOfficeWorkspace = assignments.some(
+    (assignment) => String(assignment.workspace || "").trim().toLowerCase() === "office"
+  );
+
+  if (hasSuperAdminRole) {
     return {
       isAdmin: true,
       officeAccess: true,
@@ -146,33 +165,15 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
     };
   }
 
-  const publicUserLookup = await supabaseAdmin
-    .from("users")
-    .select("id, email, role")
-    .ilike("email", normalizedEmail)
-    .maybeSingle();
-
-  const publicUser = publicUserLookup.data as { id?: number; email?: string; role?: string } | null;
-  const publicUserId = publicUser?.id ? String(publicUser.id) : "";
-
-  const assignments = publicUserId
-    ? await supabaseAdmin
-        .from("user_roles")
-        .select("workspace, roles:role_id(role_name)")
-        .eq("user_id", publicUserId)
-        .eq("is_active", true)
-    : { data: [] as Array<{ workspace?: string; roles?: { role_name?: string } | Array<{ role_name?: string }> }> };
-
-  const roleFromAssignments = (assignments.data || []).some((assignment) => {
+  const roleFromAssignments = assignments.some((assignment) => {
     const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
     return roleCanAdmin(roleLookup?.role_name);
   });
 
-  const hasOfficeWorkspace = (assignments.data || []).some((assignment) => String(assignment.workspace || "") === "office");
-  const isAdmin = roleCanAdmin(publicUser?.role) || roleFromAssignments;
+  const isAdmin = roleFromAssignments;
   const metadataAdmin = Boolean(authMetadata.office_is_admin);
   const effectiveAdmin = isAdmin || metadataAdmin;
-  const metadataAccess = Boolean(authMetadata.office_access ?? true);
+  const metadataAccess = authMetadata.office_access === true;
 
   return {
     isAdmin: effectiveAdmin,

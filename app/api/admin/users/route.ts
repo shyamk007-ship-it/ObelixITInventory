@@ -262,9 +262,9 @@ const resolvePublicUserId = async (_authUserId: string, email: string) => {
   return String(emailMatch.data.id);
 };
 
-const upsertUserRoleAssignments = async (publicUserId: string, assignments: RoleAssignmentInput[]) => {
+const upsertUserRoleAssignments = async (authUserId: string, assignments: RoleAssignmentInput[]) => {
   const supabaseAdmin = getSupabaseAdmin();
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", authUserId);
 
   if (assignments.length === 0) {
     return;
@@ -281,7 +281,7 @@ const upsertUserRoleAssignments = async (publicUserId: string, assignments: Role
     }
 
     return {
-    user_id: publicUserId,
+    user_id: authUserId,
     role_id: roleId,
     workspace: assignment.workspace,
     vessel_id: assignment.workspace === "vessel" ? assignment.vessel_id : null,
@@ -448,7 +448,7 @@ const updateUserCore = async (userId: string, payload: CreateUserPayload) => {
   }
 
   try {
-    await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+    await upsertUserRoleAssignments(userId, payload.assignments || []);
   } catch (error) {
     return {
       success: false as const,
@@ -502,9 +502,7 @@ const deleteUserCore = async (userId: string) => {
     publicUserId = null;
   }
 
-  if (publicUserId) {
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", publicUserId);
-  }
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
   await supabaseAdmin.from("user_sessions").delete().eq("user_id", userId);
   await supabaseAdmin.from("workspace_mappings").delete().eq("user_id", userId);
   await supabaseAdmin.from("users").delete().ilike("email", targetEmail);
@@ -595,7 +593,7 @@ export async function POST(request: Request) {
         payload.force_password_change
       );
 
-      await upsertUserRoleAssignments(publicUserId, payload.assignments || []);
+      await upsertUserRoleAssignments(createResult.data.user.id, payload.assignments || []);
       await upsertOfficeUserAndPermissions({
         authUserId: createResult.data.user.id,
         publicUserId: Number.isNaN(Number(publicUserId)) ? null : Number(publicUserId),
