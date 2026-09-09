@@ -138,7 +138,7 @@ const extractRoleLookup = (value: unknown) => {
   const id = String(roleRecord.id || "").trim();
   const role_name = String(roleRecord.role_name || "").trim();
 
-  if (!id || !role_name) {
+  if (!role_name) {
     return undefined;
   }
 

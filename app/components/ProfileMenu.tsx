@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Building2, Ship } from "lucide-react";
+import { Activity, Bell, Building2, ChevronDown, HelpCircle, LogOut, Settings2, Shield, Ship, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { buildAuditDescription, createAuditLog } from "../lib/audit";
@@ -11,12 +11,16 @@ import { getWorkspaceLabel, roleLabel } from "../lib/rbac";
 
 interface MenuAction {
   label: string;
+  icon: typeof UserRound;
   handler: () => Promise<void> | void;
 }
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<"below" | "above">("below");
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const { loading, profile, activeAssignment, assignments, switchAssignment } = useEnterpriseAccess();
 
@@ -46,8 +50,50 @@ export default function ProfileMenu() {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const positionDropdown = () => {
+      const trigger = triggerRef.current;
+      const dropdown = dropdownRef.current;
+      if (!trigger || !dropdown) return;
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const dropdownRect = dropdown.getBoundingClientRect();
+      const viewportPadding = 12;
+      const shouldOpenAbove = triggerRect.bottom + dropdownRect.height + viewportPadding > window.innerHeight;
+      setPlacement(shouldOpenAbove ? "above" : "below");
+    };
+
+    positionDropdown();
+    window.addEventListener("resize", positionDropdown);
+    window.addEventListener("scroll", positionDropdown, true);
+    return () => {
+      window.removeEventListener("resize", positionDropdown);
+      window.removeEventListener("scroll", positionDropdown, true);
+    };
+  }, [open, assignments.length]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const firstItem = dropdownRef.current?.querySelector<HTMLButtonElement>("button[role='menuitem']");
+    firstItem?.focus();
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const closeAndNavigate = async (path: string) => {
     setOpen(false);
+    triggerRef.current?.focus();
     router.push(path);
   };
 
@@ -97,28 +143,42 @@ export default function ProfileMenu() {
   const WorkspaceIcon = activeAssignment?.workspace === "fleet" ? Ship : Building2;
 
   const menuActions: MenuAction[] = [
-    { label: "My Profile", handler: () => closeAndNavigate("/profile?section=profile") },
-    { label: "Preferences", handler: () => closeAndNavigate("/profile?section=settings") },
-    { label: "Notifications", handler: () => closeAndNavigate("/profile?section=notifications") },
-    { label: "Activity Log", handler: () => closeAndNavigate("/profile?section=activity") },
-    { label: "Security", handler: () => closeAndNavigate("/profile?section=security") },
-    { label: "API Tokens", handler: () => closeAndNavigate("/profile?section=tokens") },
-    { label: "Help Center", handler: () => closeAndNavigate("/office/knowledge-base") },
+    { label: "My Profile", icon: UserRound, handler: () => closeAndNavigate("/profile?section=profile") },
+    { label: "Preferences", icon: Settings2, handler: () => closeAndNavigate("/profile?section=settings") },
+    { label: "Notifications", icon: Bell, handler: () => closeAndNavigate("/profile?section=notifications") },
+    { label: "Activity Log", icon: Activity, handler: () => closeAndNavigate("/profile?section=activity") },
+    { label: "Security", icon: Shield, handler: () => closeAndNavigate("/profile?section=security") },
+    { label: "Help Center", icon: HelpCircle, handler: () => closeAndNavigate("/office/knowledge-base") },
   ];
 
   return (
     <div ref={wrapperRef} style={styles.wrapper}>
-      <button type="button" style={styles.profileButton} onClick={() => setOpen((prev) => !prev)} aria-expanded={open}>
+      <button
+        ref={triggerRef}
+        type="button"
+        style={styles.profileButton}
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls="profile-menu"
+      >
         <div style={styles.avatar}>{(profile?.full_name || "U").charAt(0).toUpperCase()}</div>
 
         <div style={styles.userInfo}>
           <span style={styles.userLabel}>Signed in as</span>
           <span style={styles.userName}>{profile?.full_name || "User"}</span>
         </div>
+        <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms ease" }} aria-hidden="true" />
       </button>
 
       {open && (
-        <div style={styles.dropdown}>
+        <div
+          ref={dropdownRef}
+          id="profile-menu"
+          role="menu"
+          aria-label="Profile menu"
+          style={{ ...styles.dropdown, ...(placement === "above" ? styles.dropdownAbove : styles.dropdownBelow) }}
+        >
           <div style={styles.profileHeader}>
             <span style={styles.profileName}>{profile?.full_name || "User"}</span>
             <span style={styles.roleBadge}>{currentRole}</span>
@@ -132,7 +192,8 @@ export default function ProfileMenu() {
           </div>
 
           {menuActions.map((item) => (
-            <button key={item.label} type="button" style={styles.dropdownItem} onClick={() => void item.handler()}>
+            <button key={item.label} type="button" role="menuitem" style={styles.dropdownItem} onClick={() => void item.handler()}>
+              <item.icon size={16} strokeWidth={2} aria-hidden="true" />
               {item.label}
             </button>
           ))}
@@ -143,6 +204,7 @@ export default function ProfileMenu() {
             <button
               key={assignment.id}
               type="button"
+              role="menuitem"
               style={{
                 ...styles.dropdownItem,
                 ...(activeAssignment?.id === assignment.id ? styles.dropdownItemActive : {}),
@@ -154,7 +216,8 @@ export default function ProfileMenu() {
             </button>
           ))}
 
-          <button type="button" style={{ ...styles.dropdownItem, color: "#ef4444" }} onClick={() => void handleLogout()}>
+          <button type="button" role="menuitem" style={{ ...styles.dropdownItem, color: "#b91c1c" }} onClick={() => void handleLogout()}>
+            <LogOut size={16} strokeWidth={2} aria-hidden="true" />
             Logout
           </button>
         </div>
@@ -166,11 +229,12 @@ export default function ProfileMenu() {
 const styles: Record<string, CSSProperties> = {
   wrapper: {
     position: "relative",
+    zIndex: 1200,
   },
   profileButton: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     background: "white",
     border: "1px solid #e2e8f0",
     borderRadius: 999,
@@ -178,6 +242,7 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     minWidth: 180,
     justifyContent: "center",
+    color: "#172033",
   },
   avatar: {
     width: 44,
@@ -213,15 +278,24 @@ const styles: Record<string, CSSProperties> = {
   },
   dropdown: {
     position: "absolute",
-    top: 70,
     right: 0,
     background: "white",
-    borderRadius: 16,
-    boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
-    overflow: "hidden",
-    minWidth: 280,
+    borderRadius: 12,
+    boxShadow: "0 18px 44px rgba(15, 23, 42, 0.16)",
+    overflowY: "auto",
+    overflowX: "hidden",
+    maxHeight: "calc(100vh - 100px)",
+    minWidth: "min(280px, calc(100vw - 24px))",
+    maxWidth: "calc(100vw - 24px)",
+    overscrollBehavior: "contain",
     zIndex: 999,
     border: "1px solid #e2e8f0",
+  },
+  dropdownBelow: {
+    top: "calc(100% + 8px)",
+  },
+  dropdownAbove: {
+    bottom: "calc(100% + 8px)",
   },
   profileHeader: {
     padding: "16px 16px 10px",
@@ -286,8 +360,11 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     color: "#0f172a",
     fontSize: 14,
-    fontWeight: 600,
+    fontWeight: 500,
     transition: "background 0.15s ease, color 0.15s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   },
   dropdownItemActive: {
     background: "#eff6ff",

@@ -8,7 +8,6 @@ import OfficeHeader from "../components/office/OfficeHeader";
 import WorkspaceBreadcrumbs from "../components/shared/WorkspaceBreadcrumbs";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
 import { useEnterpriseAccess } from "../components/shared/EnterpriseAccessProvider";
-import { canAccessWorkspaceAssignments } from "../lib/rbac";
 import { getOfficeRoutePermission } from "../lib/office-permissions";
 import { useOfficePermissions } from "../hooks/useOfficePermissions";
 
@@ -89,7 +88,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    if (!canAccessWorkspaceAssignments(assignments, "office") || !officeAccess) {
+    if (!officeAccess) {
       void createAuditLog({
         action: "Permission Denied",
         description: buildAuditDescription({
@@ -142,7 +141,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
     return () => window.clearInterval(timer);
   }, []);
 
-  if (loading || permissionLoading || !profile || !canAccessWorkspaceAssignments(assignments, "office") || !officeAccess) {
+  if (loading || permissionLoading || !profile || !officeAccess) {
     return (
       <div style={styles.loading}>
         <p>Preparing Office workspace...</p>

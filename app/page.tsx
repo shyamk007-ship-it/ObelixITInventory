@@ -8,10 +8,12 @@ import PortalHeader from "./components/shared/PortalHeader";
 import WorkspaceCard from "./components/WorkspaceCard";
 import { getAssignmentLandingRoute, getWorkspaceLabel } from "./lib/rbac";
 import { Building2, Ship } from "lucide-react";
+import { useOfficePermissions } from "./hooks/useOfficePermissions";
 
 export default function Home() {
   const router = useRouter();
   const { loading, profile, assignments, activeAssignment, accessibleWorkspaces, accessibleVessels } = useEnterpriseAccess();
+  const { loading: officePermissionLoading, officeAccess } = useOfficePermissions();
 
   useEffect(() => {
     if (!loading && !profile) {
@@ -19,7 +21,7 @@ export default function Home() {
     }
   }, [loading, profile, router]);
 
-  if (loading) {
+  if (loading || officePermissionLoading) {
     return (
       <div style={styles.loadingWrap}>
         <p style={styles.loadingText}>Preparing company portal...</p>
@@ -31,7 +33,7 @@ export default function Home() {
     return null;
   }
 
-  const canSeeOffice = accessibleWorkspaces.office;
+  const canSeeOffice = accessibleWorkspaces.office || officeAccess;
   const canSeeFleet = accessibleWorkspaces.fleet;
 
   return (

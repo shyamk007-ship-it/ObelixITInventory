@@ -15,10 +15,10 @@ interface LoginHistoryItem {
   description: string;
 }
 
-type ProfileSection = "profile" | "settings" | "notifications" | "security";
+type ProfileSection = "profile" | "settings" | "notifications" | "security" | "activity";
 
 const getSection = (value: string | null): ProfileSection => {
-  if (value === "settings" || value === "notifications" || value === "security") {
+  if (value === "settings" || value === "notifications" || value === "security" || value === "activity") {
     return value;
   }
   return "profile";
@@ -324,6 +324,15 @@ export default function ProfilePage() {
           }}
         />
         <TabButton
+          label="Activity Log"
+          active={section === "activity"}
+          onClick={() => {
+            if (forcedPasswordChange) return;
+            setSection("activity");
+            router.push("/profile?section=activity");
+          }}
+        />
+        <TabButton
           label="Security"
           active={section === "security"}
           onClick={() => {
@@ -417,7 +426,7 @@ export default function ProfilePage() {
         </section>
       )}
 
-      {(section === "profile" || section === "notifications") && (
+      {(section === "profile" || section === "notifications" || section === "activity") && (
         <section style={styles.card}>
           <h2 style={styles.cardTitle}>Login History</h2>
           <div style={styles.historyList}>
