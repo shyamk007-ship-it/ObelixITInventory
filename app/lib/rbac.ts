@@ -190,7 +190,10 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
 
   let assignmentRows: Array<Record<string, unknown>>;
 
-  if (error || !data) {
+  const joinedRoleRows = (data || []) as Array<Record<string, unknown>>;
+  const hasUsableJoinedRoles = joinedRoleRows.length === 0 || joinedRoleRows.every((record) => Boolean(extractRoleLookup(record.roles)?.role_name));
+
+  if (error || !data || !hasUsableJoinedRoles) {
     const legacyLookup = await supabase
       .from("user_roles")
       .select("id, user_id, workspace, vessel_id, department, is_active, created_at, updated_at, role")
@@ -208,7 +211,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
       roles: { id: "", role_name: String(record.role || "") },
     }));
   } else {
-    assignmentRows = data as Array<Record<string, unknown>>;
+    assignmentRows = joinedRoleRows;
   }
 
   return assignmentRows.map((record) => {

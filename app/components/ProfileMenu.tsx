@@ -18,6 +18,7 @@ interface MenuAction {
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<"below" | "above">("below");
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, bottom: 0, right: 12 });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +64,11 @@ export default function ProfileMenu() {
       const viewportPadding = 12;
       const shouldOpenAbove = triggerRect.bottom + dropdownRect.height + viewportPadding > window.innerHeight;
       setPlacement(shouldOpenAbove ? "above" : "below");
+      setDropdownPosition({
+        top: triggerRect.bottom + 8,
+        bottom: window.innerHeight - triggerRect.top + 8,
+        right: Math.max(viewportPadding, window.innerWidth - triggerRect.right),
+      });
     };
 
     positionDropdown();
@@ -177,7 +183,13 @@ export default function ProfileMenu() {
           id="profile-menu"
           role="menu"
           aria-label="Profile menu"
-          style={{ ...styles.dropdown, ...(placement === "above" ? styles.dropdownAbove : styles.dropdownBelow) }}
+          style={{
+            ...styles.dropdown,
+            ...(placement === "above" ? styles.dropdownAbove : styles.dropdownBelow),
+            top: placement === "above" ? undefined : dropdownPosition.top,
+            bottom: placement === "above" ? dropdownPosition.bottom : undefined,
+            right: dropdownPosition.right,
+          }}
         >
           <div style={styles.profileHeader}>
             <span style={styles.profileName}>{profile?.full_name || "User"}</span>
@@ -277,8 +289,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 120,
   },
   dropdown: {
-    position: "absolute",
-    right: 0,
+    position: "fixed",
     background: "white",
     borderRadius: 12,
     boxShadow: "0 18px 44px rgba(15, 23, 42, 0.16)",
@@ -292,10 +303,10 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
   },
   dropdownBelow: {
-    top: "calc(100% + 8px)",
+    top: 0,
   },
   dropdownAbove: {
-    bottom: "calc(100% + 8px)",
+    bottom: 0,
   },
   profileHeader: {
     padding: "16px 16px 10px",
