@@ -108,24 +108,10 @@ export async function getOfficeAccessForAuthUser(authUserId: string, email: stri
 
   const assignmentsLookup = await supabaseAdmin
     .from("user_roles")
-    .select("workspace, is_active, roles:role_id(role_name)")
-    .eq("user_id", authUserId)
-    .eq("is_active", true);
+    .select("workspace, roles:role_id(role_name)")
+    .eq("user_id", authUserId);
 
-  let assignments: RoleAssignmentLookup[] = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
-  const hasUsableJoinedRoles = assignments.length === 0 || assignments.every((assignment) => {
-    const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
-    return Boolean(roleLookup?.role_name);
-  });
-
-  if (assignmentsLookup.error || !hasUsableJoinedRoles) {
-    const legacyAssignments = await supabaseAdmin
-      .from("user_roles")
-      .select("workspace, roles:role_id(role_name)")
-      .eq("user_id", authUserId);
-
-    assignments = (legacyAssignments.data || []) as RoleAssignmentLookup[];
-  }
+  const assignments: RoleAssignmentLookup[] = (assignmentsLookup.data || []) as RoleAssignmentLookup[];
   const hasSuperAdminRole = assignments.some((assignment) => {
     const roleLookup = Array.isArray(assignment.roles) ? assignment.roles[0] : assignment.roles;
     return String(roleLookup?.role_name || "").trim().toLowerCase() === "super_admin";

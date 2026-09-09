@@ -183,31 +183,15 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
 
   const { data, error } = await supabase
     .from("user_roles")
-    .select("id, user_id, role_id, workspace, vessel_id, department, is_active, created_at, updated_at, roles:role_id(id, role_name)")
+    .select("id, user_id, role_id, workspace, roles:role_id(id, role_name)")
     .eq("user_id", user.id)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true });
+    .order("id", { ascending: true });
 
-  let assignmentRows: Array<Record<string, unknown>>;
-
-  const joinedRoleRows = (data || []) as Array<Record<string, unknown>>;
-  const hasUsableJoinedRoles = joinedRoleRows.length === 0 || joinedRoleRows.every((record) => Boolean(extractRoleLookup(record.roles)?.role_name));
-
-  if (error || !data || !hasUsableJoinedRoles) {
-    const legacyLookup = await supabase
-      .from("user_roles")
-      .select("id, user_id, role_id, workspace, roles:role_id(id, role_name)")
-      .eq("user_id", user.id)
-      .order("id", { ascending: true });
-
-    if (legacyLookup.error || !legacyLookup.data) {
-      return [];
-    }
-
-    assignmentRows = legacyLookup.data as Array<Record<string, unknown>>;
-  } else {
-    assignmentRows = joinedRoleRows;
+  if (error || !data) {
+    return [];
   }
+
+  const assignmentRows = data as Array<Record<string, unknown>>;
 
   return assignmentRows.map((record) => {
     const roles = extractRoleLookup(record.roles);
