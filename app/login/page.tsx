@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent, CSSProperties } from "react";
+import { ArrowRight, Building2, LockKeyhole, Mail } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { getPostLoginRoute, getUserProfile } from "../lib/rbac";
 import { createAuditLog, buildAuditDescription } from "../lib/audit";
@@ -111,62 +112,71 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={styles.container}>
+    <div className="login-page" style={styles.container}>
       <div style={styles.card}>
-        
-        {/* TITLE */}
-        <h1 style={styles.title}>
-          IT Management
-        </h1>
 
-        <p style={styles.subtitle}>
-          Secure IT Management Portal
-        </p>
+        <div style={styles.brandMark} aria-hidden="true">
+          <Building2 size={20} strokeWidth={2.2} />
+        </div>
+
+        <p style={styles.eyebrow}>Enterprise workspace</p>
+        <h1 style={styles.title}>IT Management</h1>
+
+        <p style={styles.subtitle}>Sign in to manage office operations, assets, people, and inventory.</p>
 
         {/* LOGIN FORM */}
         <form
           onSubmit={handleLogin}
           style={styles.form}
         >
-          <input
-            type="email"
-            placeholder="Enter Email"
-            value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
-            }
-            style={styles.input}
-            required
-          />
+          <label style={styles.field}>
+            <span style={styles.label}>Work email</span>
+            <span style={styles.inputWrap}>
+              <Mail size={16} style={styles.inputIcon} aria-hidden="true" />
+              <input
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={styles.input}
+                required
+              />
+            </span>
+          </label>
 
-          <input
-            type="password"
-            placeholder="Enter Password"
-            value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-            style={styles.input}
-            required
-          />
+          <label style={styles.field}>
+            <span style={styles.label}>Password</span>
+            <span style={styles.inputWrap}>
+              <LockKeyhole size={16} style={styles.inputIcon} aria-hidden="true" />
+              <input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={styles.input}
+                required
+              />
+            </span>
+          </label>
 
           <button
             type="submit"
-            style={styles.button}
+            style={{ ...styles.button, ...(loading ? styles.buttonLoading : {}) }}
+            disabled={loading}
           >
-            {loading
-              ? "Logging in..."
-              : "Login"}
+            <span>{loading ? "Signing in..." : "Sign in"}</span>
+            {!loading && <ArrowRight size={16} />}
           </button>
         </form>
 
         {/* FORGOT PASSWORD */}
-        <p
+        <button
+          type="button"
           onClick={handleForgotPassword}
           style={styles.forgot}
         >
-          Forgot Password?
-        </p>
+          Forgot password?
+        </button>
 
         {/* FOOTER */}
         <p style={styles.dev}>
@@ -183,79 +193,145 @@ export default function LoginPage() {
 
 const styles: Record<string, CSSProperties> = {
   container: {
-    height: "100vh",
+    minHeight: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background:
-      "linear-gradient(135deg, #0f172a, #1e293b)",
-    fontFamily: "Arial",
+    padding: 24,
+    background: "#f1f5f9",
+    fontFamily: "var(--font-sans)",
   },
 
   card: {
-    width: 380,
-    padding: 30,
-    background: "#111827",
-    borderRadius: 12,
-    boxShadow:
-      "0 10px 40px rgba(0,0,0,0.6)",
+    width: "min(100%, 420px)",
+    padding: "36px 36px 28px",
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    boxShadow: "0 18px 50px rgba(15, 23, 42, 0.10)",
     textAlign: "center",
   },
 
+  brandMark: {
+    width: 42,
+    height: 42,
+    margin: "0 auto 16px",
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1d4ed8",
+  },
+
+  eyebrow: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: "0.13em",
+    textTransform: "uppercase",
+  },
+
   title: {
-    color: "#38bdf8",
-    fontSize: 24,
-    marginBottom: 5,
+    color: "#172033",
+    fontFamily: "var(--font-heading)",
+    fontSize: 28,
+    fontWeight: 700,
+    margin: "8px 0 8px",
   },
 
   subtitle: {
-    color: "#94a3b8",
-    marginBottom: 25,
+    color: "#64748b",
+    lineHeight: 1.6,
+    margin: "0 auto 28px",
     fontSize: 14,
+    maxWidth: 310,
   },
 
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: 16,
+    textAlign: "left",
+  },
+
+  field: {
+    display: "grid",
+    gap: 7,
+  },
+
+  label: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 600,
+  },
+
+  inputWrap: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+  },
+
+  inputIcon: {
+    position: "absolute",
+    left: 12,
+    color: "#94a3b8",
+    pointerEvents: "none",
   },
 
   input: {
-    padding: 12,
-    borderRadius: 6,
-    border: "1px solid #334155",
-    background: "#0f172a",
-    color: "white",
+    width: "100%",
+    padding: "11px 12px 11px 38px",
+    borderRadius: 8,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#172033",
     outline: "none",
+    minHeight: 44,
   },
 
   button: {
-    padding: 12,
+    minHeight: 44,
+    padding: "0 14px",
     background: "#2563eb",
     color: "white",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     cursor: "pointer",
-    fontWeight: "bold",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontWeight: 600,
+    boxShadow: "0 6px 14px rgba(37, 99, 235, 0.18)",
+  },
+
+  buttonLoading: {
+    cursor: "wait",
+    opacity: 0.75,
   },
 
   forgot: {
-    marginTop: 15,
-    color: "#38bdf8",
+    margin: "20px auto 0",
+    color: "#2563eb",
+    background: "transparent",
+    border: 0,
     cursor: "pointer",
     fontSize: 14,
+    fontWeight: 500,
   },
 
   dev: {
     marginTop: 20,
     fontSize: 12,
-    color: "#64748b",
+    color: "#94a3b8",
   },
 
   devSmall: {
     marginTop: 5,
     fontSize: 12,
-    color: "#475569",
+    color: "#94a3b8",
   },
 };
 

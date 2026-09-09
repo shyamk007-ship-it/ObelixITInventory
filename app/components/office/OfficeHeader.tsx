@@ -64,7 +64,7 @@ export default function OfficeHeader({ title, subtitle, breadcrumbs }: OfficeHea
   const timeLabel = useMemo(() => clock.toLocaleTimeString(), [clock]);
 
   return (
-    <header style={styles.wrap}>
+    <header className="office-header" style={styles.wrap}>
       <div style={styles.topRow}>
         <div style={styles.brandRow}>
           <div style={styles.logoBadge}>

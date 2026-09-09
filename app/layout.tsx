@@ -1,5 +1,24 @@
 import "./globals.css";
+import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
 import { EnterpriseAccessProvider } from "./components/shared/EnterpriseAccessProvider";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata = {
   title: "IT Management",
@@ -13,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${inter.variable} ${manrope.variable} ${jetBrainsMono.variable}`}>
         <EnterpriseAccessProvider>{children}</EnterpriseAccessProvider>
       </body>
     </html>

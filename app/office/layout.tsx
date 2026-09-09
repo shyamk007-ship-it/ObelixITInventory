@@ -153,7 +153,7 @@ export default function OfficeLayout({ children }: { children: React.ReactNode }
   return (
     <>
       <OfficeSidebar />
-      <main style={styles.main}>
+      <main className="office-main" style={styles.main}>
         <OfficeHeader
           title={headerMeta.title}
           subtitle={headerMeta.subtitle}

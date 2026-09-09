@@ -187,7 +187,9 @@ export default function OfficeSidebar() {
       setCollapsed(parsed);
       document.documentElement.style.setProperty("--office-sidebar-width", parsed ? "96px" : "308px");
     } else {
-      document.documentElement.style.setProperty("--office-sidebar-width", "308px");
+      const compactOnMobile = window.innerWidth <= 900;
+      setCollapsed(compactOnMobile);
+      document.documentElement.style.setProperty("--office-sidebar-width", compactOnMobile ? "96px" : "308px");
     }
 
     const savedSections = window.localStorage.getItem("office.sidebar.sections");
@@ -254,7 +256,7 @@ export default function OfficeSidebar() {
   };
 
   return (
-    <aside style={{ ...styles.sidebar, ...(collapsed ? styles.sidebarCollapsed : {}) }}>
+    <aside className="office-sidebar" style={{ ...styles.sidebar, ...(collapsed ? styles.sidebarCollapsed : {}) }}>
       <div style={styles.topRow}>
         {!collapsed && (
           <div style={styles.brandHeader}>
